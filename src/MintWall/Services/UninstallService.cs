@@ -14,11 +14,28 @@ public static class UninstallService
         RemoveStartShortcuts();
 
         string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        List<string> targets = new()
+        {
+            Path.Combine(local, "MintWall"),
+            Path.Combine(local, "WallpaperStudio"),
+        };
+        if (DataPaths.IsPackaged)
+        {
+            // 包容器里的数据系统右键卸载会带走，程序内清理时也得自己删一遍。
+            targets.Add(DataPaths.Root);
+        }
+
         bool ok = true;
 
-        foreach (string name in new[] { "MintWall", "WallpaperStudio" })
+        foreach (string dir in targets)
         {
-            string dir = Path.Combine(local, name);
+            // 迁移失败说明数据还留在真实 LocalAppData，删掉就等于把唯一一份壁纸库清空。
+            if (DataPaths.MigrationIncomplete && dir.StartsWith(local, StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine("保留（迁移未完成，担心误删数据）：" + dir);
+                continue;
+            }
+
             if (!DeleteDirectory(dir))
             {
                 ok = false;

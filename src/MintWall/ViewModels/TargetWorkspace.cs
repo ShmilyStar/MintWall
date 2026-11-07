@@ -189,10 +189,22 @@ public partial class TargetWorkspace : ObservableObject
         }
 
         // tab 顺序跟着屏幕枚举走；不在位的屏幕只收起 tab，配置继续留在 settings.json 里。
-        Monitors.Clear();
+        List<MonitorWorkspace> ordered = new(screens.Count);
         foreach (MonitorInfo screen in screens)
         {
             if (_byMonitorId.TryGetValue(screen.Id, out MonitorWorkspace? workspace))
+            {
+                ordered.Add(workspace);
+            }
+        }
+
+        bool sameOrder = ordered.Count == Monitors.Count
+            && Enumerable.Range(0, ordered.Count).All(i => ReferenceEquals(ordered[i], Monitors[i]));
+        if (!sameOrder)
+        {
+            // 屏幕没变时不动集合，避免每次刷新都让 tab 闪一下、选中项被重置。
+            Monitors.Clear();
+            foreach (MonitorWorkspace workspace in ordered)
             {
                 Monitors.Add(workspace);
             }
@@ -200,7 +212,7 @@ public partial class TargetWorkspace : ObservableObject
 
         foreach (KeyValuePair<string, MonitorWorkspace> entry in _byMonitorId)
         {
-            if (!Monitors.Contains(entry.Value))
+            if (!ordered.Contains(entry.Value))
             {
                 entry.Value.Stop();
             }
@@ -208,6 +220,7 @@ public partial class TargetWorkspace : ObservableObject
 
         MonitorWorkspace? current = Selected;
         Selected = current is not null && Monitors.Contains(current) ? current : Monitors.FirstOrDefault();
+        OnPropertyChanged(nameof(HasAnyMonitor));
     }
 
     /// <summary>

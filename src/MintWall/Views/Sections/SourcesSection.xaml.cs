@@ -11,9 +11,17 @@ public partial class SourcesSection : UserControl
         InitializeComponent();
         Loaded += (_, _) => EnsurePreview();
         DataContextChanged += (_, _) => EnsurePreview();
+        IsVisibleChanged += (_, _) => EnsurePreview();
     }
 
-    private void EnsurePreview() => (DataContext as MonitorWorkspace)?.EnsureSourcePreview();
+    // 页面用 Visibility 切换，Collapsed 时 Loaded 照样会触发；不可见就不该提前联网取样片。
+    private void EnsurePreview()
+    {
+        if (IsVisible)
+        {
+            (DataContext as MonitorWorkspace)?.EnsureSourcePreview();
+        }
+    }
 
     /// <summary>路径那一栏本身就是入口，点一下等同于「选择目录」。</summary>
     private void SaveFolder_Click(object sender, RoutedEventArgs e) =>

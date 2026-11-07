@@ -19,10 +19,10 @@ public static class NativeMethods
     public const int SPIF_UPDATEINIFILE = 0x01;
     public const int SPIF_SENDWININICHANGE = 0x02;
 
-    public const uint SM_CXVIRTUALSCREEN = 79;
-    public const uint SM_CYVIRTUALSCREEN = 80;
-    public const uint SM_XVIRTUALSCREEN = 76;
-    public const uint SM_YVIRTUALSCREEN = 77;
+    public const int SM_CXVIRTUALSCREEN = 79;
+    public const int SM_CYVIRTUALSCREEN = 80;
+    public const int SM_XVIRTUALSCREEN = 76;
+    public const int SM_YVIRTUALSCREEN = 77;
 
     public const int ATTACH_PARENT_PROCESS = -1;
 
@@ -33,7 +33,7 @@ public static class NativeMethods
     public static extern bool SystemParametersInfo(int action, int param, StringBuilder pvParam, int flags);
 
     [DllImport("user32.dll")]
-    public static extern IntPtr GetSystemMetrics(uint nIndex);
+    public static extern int GetSystemMetrics(int nIndex);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     public static extern bool AttachConsole(int dwProcessId);

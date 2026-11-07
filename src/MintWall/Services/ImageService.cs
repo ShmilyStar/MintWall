@@ -31,6 +31,33 @@ public static class ImageService
 
     private const int MaxRedirects = 10;
 
+    private const long MaxBodyBytes = 64L * 1024 * 1024;
+
+    /// <summary>壁纸接口正常只返回几 MB；失效链接跳到视频/大文件时及时止损，别把几百 MB 读进内存。</summary>
+    private static async Task<byte[]> ReadBodyLimitedAsync(HttpContent content, CancellationToken ct)
+    {
+        if (content.Headers.ContentLength is long declared && declared > MaxBodyBytes)
+        {
+            throw new HttpRequestException($"接口声明的内容超过 64 MB（{FormatSize(declared)}），已停止下载。");
+        }
+
+        using Stream stream = await content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using MemoryStream buffer = new();
+        byte[] chunk = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(chunk, ct).ConfigureAwait(false)) > 0)
+        {
+            if (buffer.Length + read > MaxBodyBytes)
+            {
+                throw new HttpRequestException("接口返回的内容超过 64 MB，已停止下载。");
+            }
+
+            buffer.Write(chunk, 0, read);
+        }
+
+        return buffer.ToArray();
+    }
+
     private static HttpClient CreateClient()
     {
         // 自己跟随跳转：.NET 默认拒绝 https → http 的降级重定向，而部分壁纸站正是这么跳的。
@@ -116,7 +143,12 @@ public static class ImageService
         else if (source.Kind == SourceKind.Auto && IsPlainTextUrl(first))
         {
             imageUrl = ExtractPlainTextUrl(Encoding.UTF8.GetString(first.Body));
-            FetchResult second = await FetchAsync(imageUrl!, source.Headers, ct, trace).ConfigureAwait(false);
+            if (imageUrl is null)
+            {
+                throw new InvalidOperationException("接口返回的文本不是单个图片链接，请检查接口或改用 JSON 字段路径。");
+            }
+
+            FetchResult second = await FetchAsync(imageUrl, source.Headers, ct, trace).ConfigureAwait(false);
             imageBytes = second.Body;
             first = second;
         }
@@ -148,7 +180,7 @@ public static class ImageService
                 continue;
             }
 
-            byte[] body = await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+            byte[] body = await ReadBodyLimitedAsync(response.Content, ct).ConfigureAwait(false);
             string contentType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
             string finalUrl = response.RequestMessage?.RequestUri?.ToString() ?? current.ToString();
 
@@ -408,22 +440,29 @@ public static class ImageService
         string fileName = $"{DateTime.Now:yyyyMMdd-HHmmss}-{Guid.NewGuid().ToString("N")[..8]}.{extension}";
         string target = Path.Combine(libraryDir, fileName);
 
-        bool sameFormat = extension == sniffed || (extension == "jpg" && sniffed == "jpeg");
-        if (sameFormat)
+        try
         {
-            File.WriteAllBytes(target, body);
+            bool sameFormat = extension == sniffed || (extension == "jpg" && sniffed == "jpeg");
+            if (sameFormat)
+            {
+                File.WriteAllBytes(target, body);
+            }
+            else
+            {
+                using SKImage image = SKImage.FromBitmap(bitmap);
+                SKEncodedImageFormat format = extension == "png" ? SKEncodedImageFormat.Png : SKEncodedImageFormat.Jpeg;
+                using SKData data = image.Encode(format, format == SKEncodedImageFormat.Jpeg ? 92 : 100)
+                    ?? throw new InvalidOperationException("图片重新编码失败。");
+                using FileStream stream = File.Create(target);
+                data.SaveTo(stream);
+            }
         }
-        else
+        finally
         {
-            using SKImage image = SKImage.FromBitmap(bitmap);
-            SKEncodedImageFormat format = extension == "png" ? SKEncodedImageFormat.Png : SKEncodedImageFormat.Jpeg;
-            using SKData data = image.Encode(format, format == SKEncodedImageFormat.Jpeg ? 92 : 100)
-                ?? throw new InvalidOperationException("图片重新编码失败。");
-            using FileStream stream = File.Create(target);
-            data.SaveTo(stream);
+            // 写盘/转码失败时也要释放全尺寸位图，定时任务反复失败不能把原生内存堆起来。
+            bitmap.Dispose();
         }
 
-        bitmap.Dispose();
         return new AcquiredImage(target, extension, width, height, new FileInfo(target).Length, sourceUrl, trace);
     }
 

@@ -87,6 +87,7 @@ public sealed class LibraryService
             }
         }
 
+        _meta.Flush();
         return removed;
     }
 
@@ -98,9 +99,11 @@ public sealed class LibraryService
 
         try
         {
-            IEnumerable<string> candidates = recursive
-                ? System.IO.Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
-                : System.IO.Directory.EnumerateFiles(directory);
+            IEnumerable<string> candidates = System.IO.Directory.EnumerateFiles(directory, "*", new EnumerationOptions
+            {
+                RecurseSubdirectories = recursive,
+                IgnoreInaccessible = true,
+            });
 
             foreach (string path in candidates)
             {
@@ -161,12 +164,26 @@ public sealed class LibraryService
         List<string> trace = new() { $"本地导入 {Path.GetFileName(sourcePath)} {ImageService.FormatSize(body.LongLength)}" };
         AcquiredImage acquired = ImageService.SaveToLibrary(body, $"local:{sourcePath}", Directory, encode, trace);
         _meta.Put(acquired.FilePath, acquired.Width, acquired.Height, acquired.SourceUrl);
+        _meta.Flush();
         return acquired;
     }
 
-    public void Record(AcquiredImage acquired) => _meta.Put(acquired.FilePath, acquired.Width, acquired.Height, acquired.SourceUrl);
+    public void Record(AcquiredImage acquired)
+    {
+        _meta.Put(acquired.FilePath, acquired.Width, acquired.Height, acquired.SourceUrl);
+        _meta.Flush();
+    }
+
+    /// <summary>列表刷新时 Describe 补读的元数据，在整轮结束后统一落盘一次。</summary>
+    public void FlushMeta() => _meta.Flush();
 
     public void Delete(string path)
+    {
+        DeleteCore(path);
+        _meta.Flush();
+    }
+
+    private void DeleteCore(string path)
     {
         File.Delete(path);
         _meta.Remove(path);
@@ -204,15 +221,19 @@ public sealed class LibraryService
 
             try
             {
-                Delete(path);
+                DeleteCore(path);
                 removed++;
             }
             catch (IOException)
             {
                 // A file held by the shell stays for the next pass.
             }
+            catch (UnauthorizedAccessException)
+            {
+            }
         }
 
+        _meta.Flush();
         return removed;
     }
 

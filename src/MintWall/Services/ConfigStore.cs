@@ -23,7 +23,11 @@ public sealed class ConfigStore
                 string text = File.ReadAllText(DataPaths.SettingsFile);
                 AppSettings? loaded = JsonSerializer.Deserialize<AppSettings>(text, Options);
 
-                if (loaded is not null && (loaded.Desktop.IsSplit || loaded.Lock.IsSplit || HasLegacyPayload(loaded)))
+                // 有 desktop/lock 节点就是新格式；不能靠 IsSplit 判断，monitors 还空着的新文件会被误当成 1.0 升级。
+                using JsonDocument doc = JsonDocument.Parse(text);
+                bool modern = doc.RootElement.ValueKind == JsonValueKind.Object
+                    && (doc.RootElement.TryGetProperty("desktop", out _) || doc.RootElement.TryGetProperty("lock", out _));
+                if (loaded is not null && modern)
                 {
                     return loaded;
                 }
@@ -39,6 +43,16 @@ public sealed class ConfigStore
         catch (Exception ex)
         {
             LastError = ex.Message;
+            try
+            {
+                if (File.Exists(DataPaths.SettingsFile))
+                {
+                    File.Copy(DataPaths.SettingsFile, DataPaths.SettingsFile + ".corrupt", overwrite: true);
+                }
+            }
+            catch (IOException)
+            {
+            }
         }
 
         AppSettings fresh = New();
@@ -49,7 +63,16 @@ public sealed class ConfigStore
     public void Save(AppSettings settings)
     {
         Directory.CreateDirectory(DataPaths.Root);
-        File.WriteAllText(DataPaths.SettingsFile, JsonSerializer.Serialize(settings, Options));
+        string temp = DataPaths.SettingsFile + ".tmp";
+        File.WriteAllText(temp, JsonSerializer.Serialize(settings, Options));
+        if (File.Exists(DataPaths.SettingsFile))
+        {
+            File.Replace(temp, DataPaths.SettingsFile, DataPaths.SettingsFile + ".bak", ignoreMetadataErrors: true);
+        }
+        else
+        {
+            File.Move(temp, DataPaths.SettingsFile);
+        }
     }
 
     public string? LastError { get; private set; }
@@ -69,9 +92,6 @@ public sealed class ConfigStore
         Url = "https://t.alcy.cc/ycy",
         Kind = SourceKind.Auto,
     };
-
-    private static bool HasLegacyPayload(AppSettings settings) =>
-        settings.Desktop.LegacySources is { Count: > 0 } || settings.Lock.LegacySources is { Count: > 0 };
 
     private static AppSettings Upgrade(LegacySettings legacy)
     {

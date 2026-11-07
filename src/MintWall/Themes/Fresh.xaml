@@ -215,9 +215,6 @@
                             BorderThickness="1"
                             CornerRadius="10"
                             Padding="{TemplateBinding Padding}">
-                        <Border.Effect>
-                            <DropShadowEffect Color="#3FAF9A" BlurRadius="16" ShadowDepth="1" Direction="270" Opacity="0.30" />
-                        </Border.Effect>
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center" />
                     </Border>
@@ -600,7 +597,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ListBoxItem">
-                    <Border x:Name="shell" Background="Transparent" CornerRadius="10" Padding="11,8">
+                    <Border x:Name="shell" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="10" Padding="11,8">
                         <ContentPresenter />
                     </Border>
                     <ControlTemplate.Triggers>
@@ -610,7 +607,6 @@
                         <Trigger Property="IsSelected" Value="True">
                             <Setter TargetName="shell" Property="Background" Value="{StaticResource BrushAccentSoft}" />
                             <Setter TargetName="shell" Property="BorderBrush" Value="#B7E0D3" />
-                            <Setter TargetName="shell" Property="BorderThickness" Value="1" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

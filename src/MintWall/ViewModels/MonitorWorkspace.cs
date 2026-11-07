@@ -25,7 +25,10 @@ public partial class MonitorWorkspace : ObservableObject
     private bool _sessionLocked;
     private CancellationTokenSource? _thumbCts;
     private CancellationTokenSource? _sourcePreviewCts;
+    private CancellationTokenSource? _previewCts;
+    private readonly List<LibraryItem> _allItems = new();
     private bool _sourcePreviewAttempted;
+    private bool _committingSource;
 
     public MonitorWorkspace(MainViewModel host, bool isLock, MonitorSettings data)
     {
@@ -50,11 +53,24 @@ public partial class MonitorWorkspace : ObservableObject
         _fetchFromLibrary = Data.FetchFromLibrary;
         _fetchFromBuiltIn = Data.FetchFromBuiltIn;
 
-        _timer.Tick += async (_, _) => await FetchAsync(auto: true);
+        _timer.Tick += async (_, _) =>
+        {
+            try
+            {
+                await FetchAsync(auto: true);
+            }
+            catch (Exception ex)
+            {
+                _host.Log($"{Title}定时换图失败：{ex.Message}");
+            }
+            finally
+            {
+                SyncTimer();
+            }
+        };
 
         RefreshLibrary();
         SyncTimer();
-        _ = RefreshPreviewAsync(CancellationToken.None);
     }
 
     public bool IsLock { get; }
@@ -472,6 +488,7 @@ public partial class MonitorWorkspace : ObservableObject
         {
             _library.Delete(item.FilePath);
             _host.Settings.Favorites.Remove(item.Id);
+            _allItems.Remove(item);
             Library.Remove(item);
             RecentItems.Remove(item);
             RaiseCounts();
@@ -479,7 +496,7 @@ public partial class MonitorWorkspace : ObservableObject
             _host.StatusText = $"已删除 {item.FileName}";
             _host.Log($"删除 {item.FileName}（{Title}）");
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _host.StatusText = "删除失败：" + ex.Message;
         }
@@ -671,7 +688,6 @@ public partial class MonitorWorkspace : ObservableObject
         }
 
         _host.Wallpaper.Apply(imagePath, ApplyTargetId, Style);
-        _host.RefreshMonitors();
         _host.CurrentWallpaperText = _host.Wallpaper.ReadLegacyWallpaper();
         Data.LastApplied = imagePath;
         RefreshLibrary();
@@ -697,27 +713,37 @@ public partial class MonitorWorkspace : ObservableObject
 
     public void CommitSourceEdit(SourceProfile edited, bool isNew)
     {
-        if (isNew)
+        _committingSource = true;
+        try
         {
-            Sources.Add(edited);
-        }
-        else
-        {
-            SourceProfile? existing = Sources.FirstOrDefault(s => s.Id == edited.Id);
-            if (existing is null)
+            if (isNew)
             {
-                return;
+                Sources.Add(edited);
             }
+            else
+            {
+                SourceProfile? existing = Sources.FirstOrDefault(s => s.Id == edited.Id);
+                if (existing is null)
+                {
+                    return;
+                }
 
-            existing.Name = edited.Name;
-            existing.Url = edited.Url;
-            existing.Kind = edited.Kind;
-            existing.JsonFieldPath = edited.JsonFieldPath;
-            existing.Headers = edited.Headers;
-            existing.AutoSave = edited.AutoSave;
-            existing.Enabled = edited.Enabled;
+                existing.Name = edited.Name;
+                existing.Url = edited.Url;
+                existing.Kind = edited.Kind;
+                existing.JsonFieldPath = edited.JsonFieldPath;
+                existing.Headers = edited.Headers;
+                existing.AutoSave = edited.AutoSave;
+                existing.Enabled = edited.Enabled;
+            }
+        }
+        finally
+        {
+            // 逐属性回写期间不让 Source_PropertyChanged 再触发一次保存/预览/日志。
+            _committingSource = false;
         }
 
+        SyncTimer();
         SelectedSource = Sources.FirstOrDefault(s => s.Id == edited.Id);
         if (SelectedSource is { } saved)
         {
@@ -756,22 +782,58 @@ public partial class MonitorWorkspace : ObservableObject
         string[] favorites = _host.Settings.Favorites.ToArray();
         int removed = _library.Trim(favorites, _host.Settings.LibraryLimit);
         List<string> files = _library.ListFiles().ToList();
-        string needle = SearchText.Trim();
 
-        Library.Clear();
+        _allItems.Clear();
         foreach (string path in files)
         {
-            if (FavoritesOnly && !favorites.Contains(Path.GetFileNameWithoutExtension(path)))
-            {
-                continue;
-            }
+            _allItems.Add(_library.ToItem(path, favorites));
+        }
 
-            if (needle.Length > 0 && !Path.GetFileName(path).Contains(needle, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
+        // 这一轮补读的尺寸/来源一次落盘，不要每张图各写一遍 library.json。
+        _library.FlushMeta();
+        ApplyLibraryFilter();
 
-            Library.Add(_library.ToItem(path, favorites));
+        if (removed > 0)
+        {
+            _host.StatusText = $"{Title}壁纸库超出 {_host.Settings.LibraryLimit} 张，已清理 {removed} 张较早的（收藏不删）。";
+        }
+    }
+
+    /// <summary>搜索/只看收藏只过滤内存里的列表，不再每次按键都扫盘、清库和重新解码缩略图。</summary>
+    private void ApplyLibraryFilter()
+    {
+        string needle = SearchText.Trim();
+        List<LibraryItem> matches = _allItems
+            .Where(item => (!FavoritesOnly || item.IsFavorite)
+                && (needle.Length == 0 || item.FileName.Contains(needle, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        HashSet<LibraryItem> keep = new(matches);
+        for (int i = Library.Count - 1; i >= 0; i--)
+        {
+            if (!keep.Contains(Library[i]))
+            {
+                Library.RemoveAt(i);
+            }
+        }
+
+        // 复用未变的条目，缩略图和选中项都不会被清掉。
+        for (int i = 0; i < matches.Count; i++)
+        {
+            int current = Library.IndexOf(matches[i]);
+            if (current < 0)
+            {
+                Library.Insert(i, matches[i]);
+            }
+            else if (current != i)
+            {
+                Library.Move(current, i);
+            }
+        }
+
+        if (SelectedLibraryItem is { } selected && !Library.Contains(selected))
+        {
+            SelectedLibraryItem = null;
         }
 
         RecentItems.Clear();
@@ -781,17 +843,15 @@ public partial class MonitorWorkspace : ObservableObject
         }
 
         RaiseCounts();
-
-        if (removed > 0)
-        {
-            _host.StatusText = $"{Title}壁纸库超出 {_host.Settings.LibraryLimit} 张，已清理 {removed} 张较早的（收藏不删）。";
-        }
-
-        _ = LoadThumbnailsAsync(Library.Take(150).ToList());
+        _ = LoadThumbnailsAsync(Library.Take(150).Where(item => item.Thumbnail is null).ToList());
     }
 
     public async Task RefreshPreviewAsync(CancellationToken token)
     {
+        _previewCts?.Cancel();
+        CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        _previewCts = cts;
+
         string? path = IsLock ? LockScreenService.ReadCurrentPath() : _host.Wallpaper.CurrentWallpaperOf(MonitorId);
 
         if (IsLock)
@@ -807,7 +867,13 @@ public partial class MonitorWorkspace : ObservableObject
         {
             ImageSource? image = path is null || !File.Exists(path)
                 ? null
-                : await Task.Run(() => ThumbnailStore.TryLoad(path, ThumbnailStore.PreviewEdge), token);
+                : await Task.Run(() => ThumbnailStore.TryLoad(path, ThumbnailStore.PreviewEdge), cts.Token);
+
+            // 有更新的刷新已经接管时，这次（较慢的）解码结果不许写回。
+            if (cts.IsCancellationRequested)
+            {
+                return;
+            }
 
             Preview = image;
         }
@@ -834,7 +900,14 @@ public partial class MonitorWorkspace : ObservableObject
     public void Stop()
     {
         _thumbCts?.Cancel();
+        _thumbCts?.Dispose();
+        _thumbCts = null;
+        _previewCts?.Cancel();
+        _previewCts?.Dispose();
+        _previewCts = null;
         _sourcePreviewCts?.Cancel();
+        _sourcePreviewCts?.Dispose();
+        _sourcePreviewCts = null;
         _timer.Stop();
     }
 
@@ -948,8 +1021,9 @@ public partial class MonitorWorkspace : ObservableObject
         List<SourceProfile> pool = usable
             .Where(source => !ReferenceEquals(source, SelectedSource))
             .ToList();
-        SelectedSource = pool[Random.Shared.Next(pool.Count)];
-        return SelectedSource;
+
+        // 自动换图只是挑一个源，不该顺手改 UI 选中项（会触发保存和一次多余的预览请求）。
+        return pool[Random.Shared.Next(pool.Count)];
     }
 
     private void RaiseCounts()
@@ -983,7 +1057,7 @@ public partial class MonitorWorkspace : ObservableObject
 
     private void Source_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(SourceProfile.Enabled) || sender is not SourceProfile source)
+        if (_committingSource || e.PropertyName != nameof(SourceProfile.Enabled) || sender is not SourceProfile source)
         {
             return;
         }
@@ -1053,9 +1127,9 @@ public partial class MonitorWorkspace : ObservableObject
         Save();
     }
 
-    partial void OnFavoritesOnlyChanged(bool value) => RefreshLibrary();
+    partial void OnFavoritesOnlyChanged(bool value) => ApplyLibraryFilter();
 
-    partial void OnSearchTextChanged(string value) => RefreshLibrary();
+    partial void OnSearchTextChanged(string value) => ApplyLibraryFilter();
 
     partial void OnScheduleEnabledChanged(bool value) => ApplySchedule();
 

@@ -31,11 +31,20 @@ public partial class MainViewModel : ObservableObject
     private CancellationTokenSource? _cts;
     private MonitorWorkspace? _editingWorkspace;
     private IReadOnlyList<MonitorInfo> _screens = Array.Empty<MonitorInfo>();
+    private readonly System.Windows.Threading.DispatcherTimer _persistTimer = new() { Interval = TimeSpan.FromMilliseconds(500) };
+    private bool _persistDirty;
 
     public MainViewModel()
     {
         NavItems = BuildNavItems();
+        _persistTimer.Tick += (_, _) =>
+        {
+            _persistTimer.Stop();
+            FlushPersist();
+        };
+
         Settings = _config.Load();
+        RetargetContainerPaths();
         DataPaths.MigrateLegacyAllFolders();
 
         EngineText = _wallpaper.EngineText;
@@ -52,6 +61,7 @@ public partial class MainViewModel : ObservableObject
         Desktop = new TargetWorkspace(this, false);
         Lock = new TargetWorkspace(this, true);
         SystemEvents.SessionSwitch += OnSessionSwitch;
+        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
 
         RefreshMonitors();
         MigrateLooseLibraries();
@@ -63,6 +73,7 @@ public partial class MainViewModel : ObservableObject
 
         RaiseCounts();
         _ = RefreshAllPreviewsAsync(CancellationToken.None);
+        _ = Task.Run(() => ThumbnailStore.PruneOld(TimeSpan.FromDays(30)));
         Log("程序已启动。");
         StatusText = "就绪。壁纸库、壁纸源和概览都按显示器分 tab，每块屏都有自己的源、库、定时和样式。";
     }
@@ -345,8 +356,24 @@ public partial class MainViewModel : ObservableObject
         Persist();
     }
 
-    /// <summary>只落盘，不再回调工作区，避免保存递归。</summary>
-    public void Persist() => _config.Save(Settings);
+    /// <summary>只落盘，不再回调工作区，避免保存递归。高频改动合并到一次写盘。</summary>
+    public void Persist()
+    {
+        _persistDirty = true;
+        _persistTimer.Stop();
+        _persistTimer.Start();
+    }
+
+    private void FlushPersist()
+    {
+        if (!_persistDirty)
+        {
+            return;
+        }
+
+        _persistDirty = false;
+        _config.Save(Settings);
+    }
 
     public void RaiseCounts()
     {
@@ -389,7 +416,10 @@ public partial class MainViewModel : ObservableObject
     public void Shutdown()
     {
         SystemEvents.SessionSwitch -= OnSessionSwitch;
+        SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         _cts?.Cancel();
+        _persistTimer.Stop();
+        FlushPersist();
         Desktop.Stop();
         Lock.Stop();
     }
@@ -408,6 +438,28 @@ public partial class MainViewModel : ObservableObject
         {
             Lock.NotifySessionLocked(locked);
             Log(locked ? "会话已锁定，锁屏定时开始计时。" : "会话已解锁，锁屏定时暂停。");
+        }
+
+        System.Windows.Threading.Dispatcher? dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            Apply();
+        }
+        else
+        {
+            dispatcher.BeginInvoke(new Action(Apply));
+        }
+    }
+
+    /// <summary>插拔屏幕/改分辨率时重新枚举；换壁纸本身不再触发整表重建。</summary>
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        void Apply()
+        {
+            RefreshMonitors();
+            _ = RefreshAllPreviewsAsync(CancellationToken.None);
+            StatusText = $"显示器配置已变化，重新识别到 {_screens.Count} 块屏。";
+            Log(StatusText);
         }
 
         System.Windows.Threading.Dispatcher? dispatcher = System.Windows.Application.Current?.Dispatcher;
@@ -524,33 +576,106 @@ public partial class MainViewModel : ObservableObject
     /// <summary>搬过家的老路径：注册表还指着我们目录里一个已经不存在的文件，去各屏库里找回同名的那张重发一次。</summary>
     private void RepairMovedWallpaperPath()
     {
+        // 包内进程写注册表会被 MSIX 虚拟化，explorer 登录时读真实注册表拿不到包内写的壁纸；
+        // 每次启动按记录补一次，保证登录后桌面仍是程序管理的那张。
+        if (DataPaths.IsPackaged)
+        {
+            bool restored = false;
+            foreach (MonitorWorkspace workspace in Desktop.Monitors)
+            {
+                if (!File.Exists(workspace.Data.LastApplied))
+                {
+                    continue;
+                }
+
+                _wallpaper.Apply(workspace.Data.LastApplied, workspace.ApplyTargetId, workspace.Style);
+                Log($"启动时已恢复桌面壁纸：{workspace.Data.LastApplied}。");
+                restored = true;
+                if (!_wallpaper.SupportsPerMonitor)
+                {
+                    // 整屏接口只能写一张，继续遍历会把前面那块屏的图覆盖掉。
+                    break;
+                }
+            }
+
+            if (restored)
+            {
+                return;
+            }
+        }
+
         string current = _wallpaper.ReadLegacyWallpaper();
-        if (current.Length == 0
-            || File.Exists(current)
-            || !current.StartsWith(DataPaths.Root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+        if (current.Length == 0 || File.Exists(current))
         {
             return;
         }
 
-        string name = Path.GetFileName(current);
-        try
+        string moved = DataPaths.Retarget(current);
+        if (!string.Equals(moved, current, StringComparison.OrdinalIgnoreCase) && File.Exists(moved))
         {
-            foreach (string dir in Directory.GetDirectories(DataPaths.DesktopWallpaperDir))
+            _wallpaper.Apply(moved, Wallpapers.AllMonitors, _wallpaper.ReadStyle());
+            Log($"桌面壁纸的旧路径已修到 {moved}。");
+            return;
+        }
+
+        if (current.StartsWith(DataPaths.Root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+        {
+            string name = Path.GetFileName(current);
+            try
             {
-                string candidate = Path.Combine(dir, name);
-                if (File.Exists(candidate))
+                foreach (string dir in Directory.GetDirectories(DataPaths.DesktopWallpaperDir))
                 {
-                    _wallpaper.Apply(candidate, Wallpapers.AllMonitors, _wallpaper.ReadStyle());
-                    Log($"桌面壁纸的旧路径已修到 {candidate}。");
-                    return;
+                    string candidate = Path.Combine(dir, name);
+                    if (File.Exists(candidate))
+                    {
+                        _wallpaper.Apply(candidate, Wallpapers.AllMonitors, _wallpaper.ReadStyle());
+                        Log($"桌面壁纸的旧路径已修到 {candidate}。");
+                        return;
+                    }
                 }
             }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
         }
-        catch (IOException)
+
+        // 包内进程写注册表会被 MSIX 虚拟化，真实注册表可能还指着已搬走的旧文件；
+        // 开机自启拉起时按记录补一次，避免登录后壁纸掉回系统默认。
+        foreach (MonitorWorkspace workspace in Desktop.Monitors)
         {
+            if (!File.Exists(workspace.Data.LastApplied))
+            {
+                continue;
+            }
+
+            _wallpaper.Apply(workspace.Data.LastApplied, workspace.ApplyTargetId, workspace.Style);
+            Log($"桌面壁纸文件已不在，按记录补回 {workspace.Data.LastApplied}。");
+            if (!_wallpaper.SupportsPerMonitor)
+            {
+                break;
+            }
         }
-        catch (UnauthorizedAccessException)
+    }
+
+    /// <summary>数据搬进包容器后，把配置里指向老根目录的记录改到新位置。</summary>
+    private void RetargetContainerPaths()
+    {
+        if (!DataPaths.IsPackaged)
         {
+            return;
+        }
+
+        foreach (TargetSettings data in new[] { Settings.Desktop, Settings.Lock })
+        {
+            foreach (MonitorSettings profile in data.Monitors)
+            {
+                profile.LastApplied = DataPaths.Retarget(profile.LastApplied);
+                profile.LibraryDirectory = DataPaths.Retarget(profile.LibraryDirectory);
+                profile.SaveDirectory = DataPaths.Retarget(profile.SaveDirectory);
+            }
         }
     }
 
@@ -654,7 +779,15 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnLibraryLimitChanged(int value)
     {
-        Settings.LibraryLimit = Math.Clamp(value, 10, 100000);
+        int clamped = Math.Clamp(value, 10, 100000);
+        if (clamped != value)
+        {
+            // 把钳位后的值写回属性，界面不会停留在没生效的数字上。
+            LibraryLimit = clamped;
+            return;
+        }
+
+        Settings.LibraryLimit = clamped;
         Persist();
     }
 
@@ -687,9 +820,14 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        _ = ApplyStartupAsync(value);
+    }
+
+    private async Task ApplyStartupAsync(bool value)
+    {
         try
         {
-            StartupService.SetEnabled(value);
+            await StartupService.SetEnabledAsync(value);
             Settings.StartWithWindows = value;
             StatusText = value ? "已添加到开机启动，下次登录会自动运行。" : "已取消开机启动。";
             Log(StatusText);

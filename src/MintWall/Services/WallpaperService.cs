@@ -13,7 +13,7 @@ public sealed class WallpaperService
     private static readonly IntPtr HWND_BROADCAST = new(0xFFFF);
     private const uint SMTO_ABORTIFHUNG = 0x0002;
 
-    private readonly IDesktopWallpaper? _api;
+    private IDesktopWallpaper? _api;
 
     public WallpaperService()
     {
@@ -37,8 +37,8 @@ public sealed class WallpaperService
                 Id = Wallpapers.AllMonitors,
                 Index = 0,
                 Label = "全部显示器",
-                Width = (int)NativeMethods.GetSystemMetrics(NativeMethods.SM_CXVIRTUALSCREEN),
-                Height = (int)NativeMethods.GetSystemMetrics(NativeMethods.SM_CYVIRTUALSCREEN),
+                Width = NativeMethods.GetSystemMetrics(NativeMethods.SM_CXVIRTUALSCREEN),
+                Height = NativeMethods.GetSystemMetrics(NativeMethods.SM_CYVIRTUALSCREEN),
                 CurrentWallpaper = ReadLegacyWallpaper(),
                 PerMonitorSupported = false,
             });
@@ -56,7 +56,29 @@ public sealed class WallpaperService
             for (uint i = 0; i < count; i++)
             {
                 string id = _api.GetMonitorDevicePathAt(i);
-                _api.GetMonitorRECT(id, out RECT rect);
+
+                // 用 SPI 设过壁纸后，接口会多列一个 legacy_monitor_001 伪屏，它没有 RECT 也设不了。
+                if (id.StartsWith("legacy_monitor", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                bool primary = false;
+                int width = 0;
+                int height = 0;
+                try
+                {
+                    _api.GetMonitorRECT(id, out RECT rect);
+                    primary = rect.Left == 0 && rect.Top == 0;
+                    width = Math.Max(0, rect.Right - rect.Left);
+                    height = Math.Max(0, rect.Bottom - rect.Top);
+                }
+                catch (Exception ex)
+                {
+                    // 单块屏取不到尺寸不代表接口失效，继续枚举其余的屏。
+                    LastError = ex.Message;
+                }
+
                 string current = string.Empty;
                 try
                 {
@@ -67,14 +89,13 @@ public sealed class WallpaperService
                     // Some drivers throw for a detached monitor; leave the field empty.
                 }
 
-                bool primary = rect.Left == 0 && rect.Top == 0;
                 list.Add(new MonitorInfo
                 {
                     Id = id,
                     Index = (int)i,
-                    Label = $"显示器 {(int)i + 1}{(primary ? "（主）" : string.Empty)}",
-                    Width = Math.Max(0, rect.Right - rect.Left),
-                    Height = Math.Max(0, rect.Bottom - rect.Top),
+                    Label = $"显示器 {list.Count + 1}{(primary ? "（主）" : string.Empty)}",
+                    Width = width,
+                    Height = height,
                     CurrentWallpaper = current,
                     PerMonitorSupported = true,
                 });
@@ -83,6 +104,10 @@ public sealed class WallpaperService
         catch (Exception ex)
         {
             LastError = ex.Message;
+            if (ex is InvalidComObjectException)
+            {
+                RefreshApi();
+            }
         }
 
         return list;
@@ -125,20 +150,42 @@ public sealed class WallpaperService
 
         WriteStyle(style);
 
+        try
+        {
+            ApplyCore(filePath, monitorId, style);
+        }
+        catch (InvalidComObjectException)
+        {
+            // explorer 重启会让旧对象失效，重建后重试一次。
+            if (RefreshApi() is null)
+            {
+                throw new NotSupportedException(
+                    "IDesktopWallpaper 接口暂时不可用，无法设置壁纸，请稍后重试。");
+            }
+
+            ApplyCore(filePath, monitorId, style);
+        }
+    }
+
+    private void ApplyCore(string filePath, string monitorId, WallpaperStyleMode style)
+    {
         bool all = monitorId is Wallpapers.AllMonitors or Wallpapers.Primary || monitorId.StartsWith("win32:", StringComparison.Ordinal);
 
         if (all)
         {
-            NativeMethods.SystemParametersInfo(
-                NativeMethods.SPI_SETDESKWALLPAPER,
-                0,
-                filePath,
-                NativeMethods.SPIF_UPDATEINIFILE | NativeMethods.SPIF_SENDWININICHANGE);
-
             if (_api is not null)
             {
+                // COM 一次下发即可；再走 SPI 会让桌面肉眼可见地刷两次。
                 _api.SetPosition(ToPosition(style));
                 _api.SetWallpaper(null, filePath);
+            }
+            else
+            {
+                NativeMethods.SystemParametersInfo(
+                    NativeMethods.SPI_SETDESKWALLPAPER,
+                    0,
+                    filePath,
+                    NativeMethods.SPIF_UPDATEINIFILE | NativeMethods.SPIF_SENDWININICHANGE);
             }
 
             return;
@@ -155,6 +202,13 @@ public sealed class WallpaperService
         BroadcastDesktopChange();
     }
 
+    private IDesktopWallpaper? RefreshApi()
+    {
+        DesktopWallpaperFactory.Release();
+        _api = DesktopWallpaperFactory.Create();
+        return _api;
+    }
+
     public string CurrentWallpaperOf(string monitorId)
     {
         if (_api is null || monitorId == Wallpapers.AllMonitors)
@@ -169,6 +223,11 @@ public sealed class WallpaperService
         catch (Exception ex)
         {
             LastError = ex.Message;
+            if (ex is InvalidComObjectException)
+            {
+                RefreshApi();
+            }
+
             return string.Empty;
         }
     }
@@ -250,8 +309,9 @@ public sealed class WallpaperService
 
     private static DesktopWallpaperPosition ToPosition(WallpaperStyleMode style) => style switch
     {
-        WallpaperStyleMode.Center or WallpaperStyleMode.Stretch => DesktopWallpaperPosition.Center,
+        WallpaperStyleMode.Center => DesktopWallpaperPosition.Center,
         WallpaperStyleMode.Tile => DesktopWallpaperPosition.Tile,
+        WallpaperStyleMode.Stretch => DesktopWallpaperPosition.Stretch,
         WallpaperStyleMode.Fit => DesktopWallpaperPosition.Fit,
         WallpaperStyleMode.Span => DesktopWallpaperPosition.Span,
         _ => DesktopWallpaperPosition.Fill,

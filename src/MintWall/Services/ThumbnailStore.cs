@@ -41,20 +41,36 @@ public static class ThumbnailStore
 
         Directory.CreateDirectory(DataPaths.ThumbDir);
 
-        using SKBitmap? full = SKBitmap.Decode(sourcePath);
-        if (full is null)
+        using SKCodec? codec = SKCodec.Create(sourcePath);
+        if (codec is null || codec.Info.Width <= 0 || codec.Info.Height <= 0)
         {
             return thumb;
         }
 
-        int edge = Math.Max(full.Width, full.Height);
-        SKBitmap? resized = null;
-        SKBitmap target = full;
+        // 先按编解码器支持的采样率缩小解码，避免 8K 原图整张进内存再缩。
+        SKImageInfo info = codec.Info;
+        int edge = Math.Max(info.Width, info.Height);
         if (edge > maxEdge)
         {
-            double scale = maxEdge / (double)edge;
-            SKImageInfo info = new(Math.Max(1, (int)(full.Width * scale)), Math.Max(1, (int)(full.Height * scale)));
-            resized = full.Resize(info, SKFilterQuality.Medium);
+            SKSizeI scaled = codec.GetScaledDimensions((float)maxEdge / edge);
+            info = new SKImageInfo(scaled.Width, scaled.Height, info.ColorType, info.AlphaType);
+        }
+
+        using SKBitmap bitmap = new(info);
+        SKCodecResult result = codec.GetPixels(info, bitmap.GetPixels());
+        if (result is not (SKCodecResult.Success or SKCodecResult.IncompleteInput))
+        {
+            return thumb;
+        }
+
+        SKBitmap target = bitmap;
+        SKBitmap? resized = null;
+        int decodedEdge = Math.Max(bitmap.Width, bitmap.Height);
+        if (decodedEdge > maxEdge)
+        {
+            double scale = maxEdge / (double)decodedEdge;
+            SKImageInfo small = new(Math.Max(1, (int)(bitmap.Width * scale)), Math.Max(1, (int)(bitmap.Height * scale)));
+            resized = bitmap.Resize(small, SKFilterQuality.Medium);
             if (resized is not null)
             {
                 target = resized;
@@ -65,20 +81,52 @@ public static class ThumbnailStore
         using SKData data = image.Encode(SKEncodedImageFormat.Png, 100)
             ?? throw new InvalidOperationException("缩略图编码失败。");
 
-        string temp = thumb + ".tmp";
+        // 网格(360)和预览(1280)可能同时给同一张图生成缩略图，临时名必须互不冲突。
+        string temp = thumb + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
         using (FileStream stream = File.Create(temp))
         {
             data.SaveTo(stream);
         }
 
         resized?.Dispose();
-        if (File.Exists(thumb))
-        {
-            File.Delete(thumb);
-        }
-
-        File.Move(temp, thumb);
+        File.Move(temp, thumb, overwrite: true);
         return thumb;
+    }
+
+    /// <summary>源文件更新或预览换档后旧 PNG 成孤儿；定期清掉长期没人碰的，避免 thumbs 只增不减。</summary>
+    public static void PruneOld(TimeSpan maxAge)
+    {
+        try
+        {
+            if (!Directory.Exists(DataPaths.ThumbDir))
+            {
+                return;
+            }
+
+            DateTime cutoff = DateTime.UtcNow - maxAge;
+            foreach (string file in Directory.EnumerateFiles(DataPaths.ThumbDir))
+            {
+                try
+                {
+                    if (File.GetLastWriteTimeUtc(file) < cutoff)
+                    {
+                        File.Delete(file);
+                    }
+                }
+                catch (IOException)
+                {
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+            }
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 
     public static ImageSource? TryLoad(string sourcePath, int maxEdge = MaxEdge)

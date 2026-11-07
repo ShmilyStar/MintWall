@@ -72,9 +72,10 @@ catch {
 }
 
 $pkg = Get-AppxPackage -Name 'MintWall.Desktop'
-$aumid = (Get-StartApps | Where-Object { $_.AppID -like "$($pkg.PackageFamilyName)*" } | Select-Object -First 1).AppID
+# 清单里 AppListEntry=none，Get-StartApps 查不到，启动标识只能按 Application Id 拼。
+$aumid = "$($pkg.PackageFamilyName)!MintWall"
 Write-Host ''
 Write-Host "==> 安装成功：$($pkg.PackageFullName)"
 Write-Host "==> 启动标识：$aumid"
 Write-Host "==> 命令行启动：explorer.exe ""shell:AppsFolder\$aumid"""
-Write-Host '开始菜单里也能找到 “MintWall 薄荷壁纸”。'
+Write-Host '开始菜单快捷方式由 Install.ps1 创建；这里只注册包。'

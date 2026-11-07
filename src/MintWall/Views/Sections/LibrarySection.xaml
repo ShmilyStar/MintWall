@@ -1,6 +1,7 @@
 <UserControl x:Class="MintWall.Views.Sections.LibrarySection"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MintWall.Views.Controls">
 
     <Border Style="{StaticResource Card}">
         <Grid>
@@ -80,10 +81,12 @@
                              ItemsSource="{Binding Library}"
                              SelectedItem="{Binding SelectedLibraryItem}"
                              ItemContainerStyle="{StaticResource ThumbItem}"
+                             ScrollViewer.CanContentScroll="True"
+                             VirtualizingPanel.IsVirtualizing="True"
                              MouseDoubleClick="Library_DoubleClick">
                         <ListBox.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <WrapPanel Orientation="Horizontal" />
+                                <controls:VirtualizingWrapPanel />
                             </ItemsPanelTemplate>
                         </ListBox.ItemsPanel>
                         <ListBox.ItemTemplate>

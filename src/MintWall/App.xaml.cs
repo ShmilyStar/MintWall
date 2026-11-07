@@ -1,4 +1,5 @@
 using System.Windows;
+using MintWall.Native;
 using MintWall.Services;
 
 namespace MintWall;
@@ -25,6 +26,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         (MainWindow as MainWindow)?.DisposeViewModel();
+        DesktopWallpaperFactory.Release();
         base.OnExit(e);
     }
 }

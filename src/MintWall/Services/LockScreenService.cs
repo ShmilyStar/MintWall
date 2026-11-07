@@ -55,6 +55,7 @@ public static class LockScreenService
         {
             StorageFile file = await StorageFile.GetFileFromPathAsync(path).AsTask(ct).ConfigureAwait(false);
             await LockScreen.SetImageFileAsync(file).AsTask(ct).ConfigureAwait(false);
+            ApiError = null;
 
             string? applied = ReadCurrentPath();
             if (applied is null)

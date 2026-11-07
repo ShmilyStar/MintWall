@@ -117,7 +117,7 @@
             <sections:ScheduleSection DataContext="{Binding Desktop.Selected}"
                                       Margin="0,12,0,0"
                                       ExtraText="打开系统背景设置"
-                                      ExtraCommand="{Binding OpenSystemBackgroundSettingsCommand}" />
+                                      ExtraCommand="{Binding DataContext.OpenSystemBackgroundSettingsCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
             </StackPanel>
 
             <!-- 锁屏 -->
@@ -220,7 +220,7 @@
             <sections:ScheduleSection DataContext="{Binding Lock.Selected}"
                                       Margin="0,12,0,0"
                                       ExtraText="打开系统锁屏设置"
-                                      ExtraCommand="{Binding OpenSystemLockSettingsCommand}" />
+                                      ExtraCommand="{Binding DataContext.OpenSystemLockSettingsCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
             </StackPanel>
         </Grid>
         </ScrollViewer>

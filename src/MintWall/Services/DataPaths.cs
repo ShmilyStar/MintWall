@@ -9,9 +9,17 @@ public static class DataPaths
 {
     static DataPaths()
     {
-        string baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        IsPackaged = DetectPackaged();
+        string baseDir = IsPackaged
+            ? Windows.Storage.ApplicationData.Current.LocalFolder.Path
+            : Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        string target = Path.Combine(baseDir, "MintWall");
+        if (IsPackaged)
+        {
+            MigrateRealLocalToContainer(target);
+        }
         MigrateLegacyRoot(baseDir);
-        Root = Path.Combine(baseDir, "MintWall");
+        Root = target;
         DesktopWallpaperDir = Path.Combine(Root, "wallpapers");
         LockWallpaperDir = Path.Combine(Root, "wallpapers-lock");
         CacheDir = Path.Combine(Root, "cache");
@@ -19,6 +27,65 @@ public static class DataPaths
         ThumbDir = Path.Combine(Root, "thumbs");
         SettingsFile = Path.Combine(Root, "settings.json");
         CreateDirectories();
+    }
+
+    private static bool DetectPackaged()
+    {
+        try
+        {
+            return Windows.ApplicationModel.Package.Current is not null;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>迁移到容器/新根目录没成功时置位；卸载清理据此保留真实目录，避免把没搬走的数据删掉。</summary>
+    public static bool MigrationIncomplete { get; private set; }
+
+    /// <summary>打包版早期把数据写在真实 LocalAppData，系统卸载带不走；首次进容器时整体搬进去。</summary>
+    private static void MigrateRealLocalToContainer(string target)
+    {
+        string real = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MintWall");
+        if (!Directory.Exists(real) || Directory.Exists(target))
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.Move(real, target);
+        }
+        catch (IOException)
+        {
+            MigrationIncomplete = true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            MigrationIncomplete = true;
+        }
+    }
+
+    /// <summary>包内运行时，配置里指向真实 LocalAppData 老根的路径一律改写到容器，保留相对子路径。</summary>
+    public static string Retarget(string path)
+    {
+        if (!IsPackaged || string.IsNullOrWhiteSpace(path))
+        {
+            return path;
+        }
+
+        string prefix = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "MintWall") + Path.DirectorySeparatorChar;
+        return path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            ? Path.Combine(Root, path[prefix.Length..])
+            : path;
     }
 
     public static string Root { get; }
@@ -39,9 +106,8 @@ public static class DataPaths
 
     public static string SettingsFile { get; }
 
-    /// <summary>True when running from an MSIX package, where LocalAppData is containerized.</summary>
-    public static bool IsPackaged =>
-        Root.Contains(Path.DirectorySeparatorChar + "Packages" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    /// <summary>True when running with MSIX package identity; data then lives in the package container so system uninstall removes it.</summary>
+    public static bool IsPackaged { get; }
 
     public static string WallpaperDirFor(bool lockScreen) => lockScreen ? LockWallpaperDir : DesktopWallpaperDir;
 
@@ -178,9 +244,11 @@ public static class DataPaths
         }
         catch (IOException)
         {
+            MigrationIncomplete = true;
         }
         catch (UnauthorizedAccessException)
         {
+            MigrationIncomplete = true;
         }
     }
 

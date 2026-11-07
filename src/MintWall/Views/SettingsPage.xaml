@@ -4,7 +4,7 @@
 
     <UserControl.Resources>
         <Style x:Key="SettingCard" TargetType="Border" BasedOn="{StaticResource Card}">
-            <Setter Property="Height" Value="140" />
+            <Setter Property="MinHeight" Value="140" />
             <Setter Property="Padding" Value="16" />
             <Setter Property="Margin" Value="0,0,0,14" />
         </Style>
@@ -109,7 +109,7 @@
                                   Style="{StaticResource ToggleSwitch}"
                                   IsChecked="{Binding StartWithWindows}" />
                         <TextBlock Style="{StaticResource Hint}"
-                                   Text="写入当前用户的启动项，关掉就删除；定时换壁纸需要程序一直运行，开机自启能省得每次手动开。" />
+                                   Text="便携版写入当前用户的启动项；MSIX 版交给系统管理，卸载时一并移除。定时换壁纸需要程序一直运行。" />
                     </StackPanel>
                 </Border>
 
