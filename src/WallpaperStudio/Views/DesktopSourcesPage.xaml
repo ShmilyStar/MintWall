@@ -1,0 +1,26 @@
+<UserControl x:Class="WallpaperStudio.Views.DesktopSourcesPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sections="clr-namespace:WallpaperStudio.Views.Sections">
+
+    <Grid Margin="24,20,24,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,14">
+            <StackPanel>
+                <TextBlock Text="桌面壁纸源" Style="{StaticResource PageTitle}" />
+                <TextBlock Text="按显示器分开配置：接口地址、解析方式、自动保存位置都只影响这块屏。" Style="{StaticResource PageSubtitle}" />
+            </StackPanel>
+        </Grid>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
+            <StackPanel>
+                <sections:MonitorTabBar DataContext="{Binding Desktop}" />
+                <sections:SourcesSection DataContext="{Binding Desktop.Selected}" Margin="0,0,0,14" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

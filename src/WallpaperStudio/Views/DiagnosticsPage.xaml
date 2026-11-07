@@ -1,0 +1,89 @@
+<UserControl x:Class="WallpaperStudio.Views.DiagnosticsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid Margin="24,20,24,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" MinHeight="200" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,14">
+            <StackPanel>
+                <TextBlock Text="诊断" Style="{StaticResource PageTitle}" />
+                <TextBlock Text="先看环境是否支持，再测接口能不能出图，最后才动桌面。" Style="{StaticResource PageSubtitle}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                <TextBlock Text="{Binding Desktop.Selected.Label, StringFormat=桌面 · {0}}" 
+                           Style="{StaticResource FieldLabel}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,6,0" />
+                <ComboBox ItemsSource="{Binding Desktop.Selected.Sources}"
+                          SelectedItem="{Binding Desktop.Selected.SelectedSource}"
+                          Width="150"
+                          Margin="0,0,6,0">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Name}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button Content="测试"
+                        Margin="0,0,12,0"
+                        Command="{Binding Desktop.Selected.TestSourceCommand}" />
+
+                <TextBlock Text="{Binding Lock.Selected.Label, StringFormat=锁屏 · {0}}" 
+                           Style="{StaticResource FieldLabel}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,6,0" />
+                <ComboBox ItemsSource="{Binding Lock.Selected.Sources}"
+                          SelectedItem="{Binding Lock.Selected.SelectedSource}"
+                          Width="150"
+                          Margin="0,0,6,0">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Name}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button Content="测试"
+                        Margin="0,0,12,0"
+                        Command="{Binding Lock.Selected.TestSourceCommand}" />
+
+                <Button Content="重新检测环境" Command="{Binding RefreshAllCommand}" Margin="0" />
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="12">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="运行环境" Style="{StaticResource SectionTitle}" Margin="4,2,4,10" />
+                    <TextBox Style="{StaticResource Report}" Text="{Binding EnvironmentReport, Mode=OneWay}" />
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Column="2" Style="{StaticResource Card}" Padding="12">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="接口诊断报告" Style="{StaticResource SectionTitle}" Margin="4,2,4,10" />
+                    <TextBox Style="{StaticResource Report}" Text="{Binding ProbeReport, Mode=OneWay}" />
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="命令行（不开窗口也能用，适合脚本和计划任务）" Style="{StaticResource SectionTitle}" />
+                <TextBox Style="{StaticResource Report}"
+                         MaxHeight="120"
+                         Text="WallpaperStudio.exe probe &lt;url&gt;        只探测接口，返回链路、Content-Type、尺寸，不动桌面&#10;WallpaperStudio.exe auto [url]            按当前源或指定 url 取图并应用&#10;WallpaperStudio.exe set &lt;图片路径&gt;      用本地图片应用&#10;WallpaperStudio.exe list                    列出壁纸源、显示器与壁纸库&#10;WallpaperStudio.exe help                    查看全部参数&#10;三个命令都支持 --target desktop|lock（默认 desktop），桌面与锁屏各自取各自的源和库。" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

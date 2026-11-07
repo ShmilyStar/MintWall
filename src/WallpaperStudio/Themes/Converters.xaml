@@ -1,0 +1,12 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:local="clr-namespace:WallpaperStudio">
+
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis" />
+    <local:TextPresentToVisibilityConverter x:Key="TextPresentToVis" />
+    <local:TextMissingToVisibilityConverter x:Key="TextMissingToVis" />
+    <local:CountToVisibilityConverter x:Key="CountToVis" />
+    <local:PageVisibilityConverter x:Key="PageVis" />
+
+</ResourceDictionary>

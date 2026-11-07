@@ -1,0 +1,123 @@
+<Window x:Class="WallpaperStudio.SourceEditDialog"
+        x:Name="editor"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="壁纸源设置"
+        Background="{StaticResource BrushWindow}"
+        Height="520" Width="560"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        TextOptions.TextFormattingMode="Display"
+        UseLayoutRounding="True"
+        FontFamily="{StaticResource UiFont}"
+        FontSize="13">
+
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="34"
+                            ResizeBorderThickness="0"
+                            CornerRadius="0"
+                            GlassFrameThickness="0"
+                            UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+
+    <Border BorderBrush="{StaticResource BrushBorder}" BorderThickness="1">
+        <DockPanel LastChildFill="True">
+
+            <Border DockPanel.Dock="Top" Height="34" Background="{StaticResource BrushRail}">
+                <Grid>
+                    <TextBlock Text="{Binding Title, ElementName=editor}"
+                               FontSize="12"
+                               Foreground="{StaticResource BrushTextDim}"
+                               VerticalAlignment="Center"
+                               Margin="12,0,0,0"
+                               TextWrapping="NoWrap" />
+                    <Button Style="{StaticResource CaptionCloseButton}"
+                            ToolTip="关闭"
+                            HorizontalAlignment="Right"
+                            Width="40"
+                            Height="34"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                            Click="Cancel_Click">
+                        <TextBlock Style="{StaticResource CaptionGlyph}" Text="&#xE8BB;" />
+                    </Button>
+                </Grid>
+            </Border>
+
+            <Grid Margin="18">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="两种常见接口都能处理：直接返回图片（如 https://t.alcy.cc/ycy 会 302 跳到 .webp），或返回一段含图片链接的 JSON。"
+                           Foreground="{StaticResource BrushTextDim}" FontSize="12" Margin="0,0,0,14" />
+
+                <StackPanel Grid.Row="1" Margin="0,0,0,10">
+                    <TextBlock Text="名称" Style="{StaticResource FieldLabel}" />
+                    <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="2" Margin="0,0,0,10">
+                    <TextBlock Text="接口地址" Style="{StaticResource FieldLabel}" />
+                    <TextBox Text="{Binding Url, UpdateSourceTrigger=PropertyChanged}" />
+                </StackPanel>
+
+                <Grid Grid.Row="3" Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="190" />
+                        <ColumnDefinition Width="14" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="解析方式" Style="{StaticResource FieldLabel}" />
+                        <ComboBox ItemsSource="{Binding KindOptions, ElementName=editor}"
+                                  SelectedValuePath="Key"
+                                  SelectedValue="{Binding Kind}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Value}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="JSON 字段路径（选填，留空自动识别）" Style="{StaticResource FieldLabel}" />
+                        <TextBox Text="{Binding JsonFieldPath, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                </Grid>
+
+                <StackPanel Grid.Row="4" Margin="0,0,0,10">
+                    <TextBlock Text="请求头（每行一条 Key: Value，选填）" Style="{StaticResource FieldLabel}" />
+                    <TextBox Text="{Binding Headers, UpdateSourceTrigger=PropertyChanged}"
+                             Height="76"
+                             AcceptsReturn="True"
+                             TextWrapping="NoWrap"
+                             VerticalScrollBarVisibility="Auto"
+                             VerticalContentAlignment="Top"
+                             FontFamily="Cascadia Mono, Consolas"
+                             FontSize="12" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="5" Margin="0,4,0,0">
+                    <CheckBox Content="自动保存：抓到的图存进这块屏的“保存位置”目录"
+                              IsChecked="{Binding AutoSave}"
+                              Margin="0,0,0,8" />
+                    <TextBlock Text="保存位置在壁纸源面板里点“选择目录”指定；没选则用程序内置的归档目录，不会进壁纸库列表。关掉自动保存则只放程序缓存，换下一张时旧图自动删除。解析方式选“必应每日壁纸”会自动取当天的必应图；“Windows 聚焦”则不联网，直接用系统本机的聚焦图。"
+                               Foreground="{StaticResource BrushTextDim}" FontSize="11.5" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                    <Button Content="取消" IsCancel="True" Width="88" Margin="0,0,8,0" />
+                    <Button Content="保存" Style="{StaticResource AccentButton}" Width="88" Margin="0" Click="Ok_Click" />
+                </StackPanel>
+            </Grid>
+        </DockPanel>
+    </Border>
+</Window>
