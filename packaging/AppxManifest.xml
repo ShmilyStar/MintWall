@@ -5,18 +5,18 @@
          xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
          IgnorableNamespaces="uap mp rescap">
 
-  <Identity Name="WallpaperStudio.Desktop"
-            Publisher="CN=WallpaperStudio Self-Signed"
+  <Identity Name="MintWall.Desktop"
+            Publisher="CN=MintWall Self-Signed"
             Version="1.1.0.0"
             ProcessorArchitecture="x64" />
 
   <mp:PhoneIdentity PhoneProductId="6f0e2c1a-9d5b-4f4a-8f4e-2b7c1d9e3a11" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
 
   <Properties>
-    <DisplayName>Wallpaper Studio</DisplayName>
-    <PublisherDisplayName>WallpaperStudio (self-signed)</PublisherDisplayName>
+    <DisplayName>薄荷壁纸 MintWall</DisplayName>
+    <PublisherDisplayName>MintWall (self-signed)</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
-    <Description>本地图片与 API 接口双链路的 Windows 壁纸工作台</Description>
+    <Description>本地图片与 API 接口双链路的 Windows 壁纸工具</Description>
   </Properties>
 
   <Dependencies>
@@ -29,15 +29,15 @@
   </Resources>
 
   <Applications>
-    <Application Id="WallpaperStudio" Executable="WallpaperStudio.exe" EntryPoint="Windows.FullTrustApplication">
-      <uap:VisualElements DisplayName="Wallpaper Studio 壁纸工作台"
+    <Application Id="MintWall" Executable="MintWall.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="薄荷壁纸 MintWall"
                           Description="导入本地图片或从 API 接口换壁纸，支持定时、多显示器与收藏库。"
-                          BackgroundColor="#17181C"
+                          BackgroundColor="#EFF8F4"
                           Square150x150Logo="Assets\Square150x150Logo.png"
                           Square44x44Logo="Assets\Square44x44Logo.png">
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png"
                          Square310x310Logo="Assets\Square310x310Logo.png"
-                         ShortName="Wallpaper Studio">
+                         ShortName="薄荷壁纸">
           <uap:ShowNameOnTiles>
             <uap:ShowOn Tile="square150x150Logo" />
             <uap:ShowOn Tile="wide310x150Logo" />

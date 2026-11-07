@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $dist = Join-Path $root 'dist'
-$cer = Join-Path $root 'packaging\WallpaperStudio.cer'
+$cer = Join-Path $root 'packaging\MintWall.cer'
 
 if (-not $Package) {
     $Package = (Get-ChildItem $dist -Filter *.msix | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
@@ -21,7 +21,7 @@ $name = (Get-Item $Package).BaseName
 Write-Host "==> 安装包：$Package"
 
 if ($Uninstall) {
-    Get-AppxPackage -Name 'WallpaperStudio.Desktop' | Remove-AppxPackage
+    Get-AppxPackage -Name 'MintWall.Desktop' | Remove-AppxPackage
     Write-Host '==> 已卸载'
     return
 }
@@ -33,7 +33,7 @@ if (-not $isAdmin) {
 }
 
 if (Test-Path $cer) {
-    $trusted = Get-ChildItem Cert:\LocalMachine\TrustedPeople | Where-Object { $_.Subject -match 'WallpaperStudio' }
+    $trusted = Get-ChildItem Cert:\LocalMachine\TrustedPeople | Where-Object { $_.Subject -match 'MintWall' }
     if (-not $trusted) {
         Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null
         Write-Host '==> 证书已加入本机受信任人'
@@ -71,10 +71,10 @@ catch {
     exit 1
 }
 
-$pkg = Get-AppxPackage -Name 'WallpaperStudio.Desktop'
+$pkg = Get-AppxPackage -Name 'MintWall.Desktop'
 $aumid = (Get-StartApps | Where-Object { $_.AppID -like "$($pkg.PackageFamilyName)*" } | Select-Object -First 1).AppID
 Write-Host ''
 Write-Host "==> 安装成功：$($pkg.PackageFullName)"
 Write-Host "==> 启动标识：$aumid"
 Write-Host "==> 命令行启动：explorer.exe ""shell:AppsFolder\$aumid"""
-Write-Host '开始菜单里也能找到 “Wallpaper Studio 壁纸工作台”。'
+Write-Host '开始菜单里也能找到 “MintWall 薄荷壁纸”。'

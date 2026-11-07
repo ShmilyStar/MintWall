@@ -1,0 +1,27 @@
+<UserControl x:Class="MintWall.Views.LockLibraryPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sections="clr-namespace:MintWall.Views.Sections">
+
+    <Grid Margin="24,20,24,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,14">
+            <StackPanel>
+                <TextBlock Text="锁屏壁纸库" Style="{StaticResource PageTitle}" />
+                <TextBlock Text="和桌面库完全分开，按显示器分 tab，各自选择目录、收藏和清理。" Style="{StaticResource PageSubtitle}" />
+            </StackPanel>
+        </Grid>
+
+        <sections:MonitorTabBar Grid.Row="1" DataContext="{Binding Lock}" />
+
+        <sections:LibrarySection Grid.Row="2"
+                                 DataContext="{Binding Lock.Selected}"
+                                 Margin="0,0,0,14"
+                                 GalleryMaxHeight="100000" />
+    </Grid>
+</UserControl>

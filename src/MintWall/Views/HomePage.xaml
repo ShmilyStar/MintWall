@@ -1,0 +1,232 @@
+<UserControl x:Class="MintWall.Views.HomePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="clr-namespace:MintWall.Views"
+             xmlns:sections="clr-namespace:MintWall.Views.Sections">
+
+    <Grid Margin="24,20,24,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,14">
+            <StackPanel>
+                <TextBlock Text="概览" Style="{StaticResource PageTitle}" />
+                <TextBlock Text="选一块屏，直接看它现在的桌面和锁屏；换图、进设置都在下面的卡里。" Style="{StaticResource PageSubtitle}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                <Button Content="刷新" Margin="0,0,8,0" Command="{Binding RefreshAllCommand}" />
+                <Button Content="打开数据目录" Command="{Binding OpenDataFolderCommand}" Margin="0" />
+            </StackPanel>
+        </Grid>
+
+        <!-- 顶栏 tab 选中的那块屏，桌面和锁屏两边一起跟着切。 -->
+        <sections:MonitorTabBar Grid.Row="1" DataContext="{Binding Desktop}" />
+
+        <!-- 两块卡各占一半、横向铺满；预览按屏幕宽高比取高，所以两边永远一样大。 -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
+        <Grid VerticalAlignment="Top">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="360" />
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="*" MinWidth="360" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 桌面 -->
+            <StackPanel Grid.Column="0">
+            <Border Style="{StaticResource Card}" Padding="0" VerticalAlignment="Top">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0"
+                            Cursor="Hand"
+                            CornerRadius="16,16,0,0"
+                            ClipToBounds="True"
+                            Background="#EAF4EF"
+                            ToolTip="点击在文件夹中打开当前这张图"
+                            views:AspectFit.Ratio="{Binding Desktop.Selected.ScreenAspect}">
+                        <Border.InputBindings>
+                            <MouseBinding MouseAction="LeftClick"
+                                          Command="{Binding Desktop.Selected.RevealCurrentImageCommand}" />
+                        </Border.InputBindings>
+                        <Grid>
+                            <Image Source="{Binding Desktop.Selected.Preview}" Stretch="UniformToFill" />
+                            <TextBlock Text="还没有这块屏的桌面预览"
+                                       Foreground="{StaticResource BrushTextFaint}"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Visibility="{Binding Desktop.Selected.HasPreview, Converter={StaticResource InverseBoolToVis}}" />
+                            <Border Style="{StaticResource ChipAccent}" Margin="12" HorizontalAlignment="Left" VerticalAlignment="Top">
+                                <TextBlock Text="{Binding Desktop.Selected.Label, StringFormat=桌面 · {0}}"
+                                           FontSize="11.5"
+                                           Foreground="{StaticResource BrushText}" />
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <WrapPanel Grid.Row="1" Margin="8,12,8,0">
+                        <Border Style="{StaticResource Chip}">
+                            <TextBlock Style="{StaticResource StatLabel}"
+                                       Text="{Binding Desktop.Selected.NextRunText, StringFormat=定时 {0}}" />
+                        </Border>
+                        <Border Style="{StaticResource Chip}">
+                            <TextBlock Style="{StaticResource StatLabel}"
+                                       Text="{Binding Desktop.Selected.LibraryCount, StringFormat=库 {0} 张}" />
+                        </Border>
+                        <Border Style="{StaticResource Chip}" Margin="0">
+                            <TextBlock Style="{StaticResource StatLabel}"
+                                       Text="{Binding Desktop.Selected.SourceCount, StringFormat=源 {0} 个}" />
+                        </Border>
+                    </WrapPanel>
+
+                    <Grid Grid.Row="2" Margin="14,12,14,14">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="换一张"
+                                    Style="{StaticResource AccentButton}"
+                                    Margin="0,0,8,0"
+                                    Command="{Binding Desktop.FetchSelectedCommand}" />
+                            <Button Content="使用当前锁屏壁纸"
+                                    Margin="0"
+                                    Command="{Binding PushLockToDesktopCommand}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <CheckBox Content="内置"
+                                      Style="{StaticResource ChoiceChip}"
+                                      ToolTip="必应每日壁纸"
+                                      IsChecked="{Binding Desktop.Selected.FetchFromBuiltIn}" />
+                            <CheckBox Content="壁纸库"
+                                      Style="{StaticResource ChoiceChip}"
+                                      ToolTip="从这块屏的壁纸库里轮流取图"
+                                      IsChecked="{Binding Desktop.Selected.FetchFromLibrary}" />
+                            <CheckBox Content="壁纸源"
+                                      Style="{StaticResource ChoiceChip}"
+                                      Margin="0"
+                                      ToolTip="从这块屏的接口源抓新图"
+                                      IsChecked="{Binding Desktop.Selected.FetchFromSources}" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <sections:ScheduleSection DataContext="{Binding Desktop.Selected}"
+                                      Margin="0,12,0,0"
+                                      ExtraText="打开系统背景设置"
+                                      ExtraCommand="{Binding OpenSystemBackgroundSettingsCommand}" />
+            </StackPanel>
+
+            <!-- 锁屏 -->
+            <StackPanel Grid.Column="2">
+            <Border Style="{StaticResource Card}" Padding="0" VerticalAlignment="Top">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0"
+                            Cursor="Hand"
+                            CornerRadius="16,16,0,0"
+                            ClipToBounds="True"
+                            Background="#EAF4EF"
+                            ToolTip="点击在文件夹中打开当前这张图"
+                            views:AspectFit.Ratio="{Binding Lock.Selected.ScreenAspect}">
+                        <Border.InputBindings>
+                            <MouseBinding MouseAction="LeftClick"
+                                          Command="{Binding Lock.Selected.RevealCurrentImageCommand}" />
+                        </Border.InputBindings>
+                        <Grid>
+                            <Image Source="{Binding Lock.Selected.Preview}" Stretch="UniformToFill" />
+                            <TextBlock Text="读不到这块屏的锁屏图片"
+                                       Foreground="{StaticResource BrushTextFaint}"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Visibility="{Binding Lock.Selected.HasPreview, Converter={StaticResource InverseBoolToVis}}" />
+                            <Border Style="{StaticResource Chip}" Margin="12" HorizontalAlignment="Left" VerticalAlignment="Top">
+                                <TextBlock Text="{Binding Lock.Selected.Label, StringFormat=锁屏 · {0}}"
+                                           FontSize="11.5"
+                                           Foreground="{StaticResource BrushText}" />
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Grid.Row="1"
+                               Margin="14,6,14,0"
+                               Style="{StaticResource Hint}"
+                               TextWrapping="Wrap"
+                               Text="{Binding Lock.Selected.Message}"
+                               Visibility="{Binding Lock.Selected.Message, Converter={StaticResource TextPresentToVis}}" />
+
+                    <Grid Grid.Row="2" Margin="8,10,8,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <WrapPanel Grid.Column="0">
+                            <Border Style="{StaticResource Chip}">
+                                <TextBlock Style="{StaticResource StatLabel}"
+                                           Text="{Binding Lock.Selected.NextRunText, StringFormat=定时 {0}}" />
+                            </Border>
+                            <Border Style="{StaticResource Chip}">
+                                <TextBlock Style="{StaticResource StatLabel}"
+                                           Text="{Binding Lock.Selected.LibraryCount, StringFormat=库 {0} 张}" />
+                            </Border>
+                            <Border Style="{StaticResource Chip}" Margin="0">
+                                <TextBlock Style="{StaticResource StatLabel}"
+                                           Text="{Binding Lock.Selected.SourceCount, StringFormat=源 {0} 个}" />
+                            </Border>
+                        </WrapPanel>
+
+                        <CheckBox Grid.Column="1"
+                                  Content="换桌面时顺便更新锁屏"
+                                  IsChecked="{Binding Desktop.SyncLockScreen}"
+                                  HorizontalAlignment="Right"
+                                  VerticalAlignment="Center"
+                                  Margin="0,0,6,0" />
+                    </Grid>
+
+                    <Grid Grid.Row="3" Margin="14,12,14,14">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="换一张"
+                                    Style="{StaticResource AccentButton}"
+                                    Margin="0,0,8,0"
+                                    Command="{Binding Lock.FetchSelectedCommand}" />
+                            <Button Content="用当前桌面壁纸"
+                                    Margin="0"
+                                    Command="{Binding PushDesktopToLockCommand}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <CheckBox Content="内置"
+                                      Style="{StaticResource ChoiceChip}"
+                                      ToolTip="必应每日壁纸"
+                                      IsChecked="{Binding Lock.Selected.FetchFromBuiltIn}" />
+                            <CheckBox Content="壁纸库"
+                                      Style="{StaticResource ChoiceChip}"
+                                      ToolTip="从这块屏的锁屏库里轮流取图"
+                                      IsChecked="{Binding Lock.Selected.FetchFromLibrary}" />
+                            <CheckBox Content="壁纸源"
+                                      Style="{StaticResource ChoiceChip}"
+                                      Margin="0"
+                                      ToolTip="从这块屏的接口源抓新图"
+                                      IsChecked="{Binding Lock.Selected.FetchFromSources}" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+            <sections:ScheduleSection DataContext="{Binding Lock.Selected}"
+                                      Margin="0,12,0,0"
+                                      ExtraText="打开系统锁屏设置"
+                                      ExtraCommand="{Binding OpenSystemLockSettingsCommand}" />
+            </StackPanel>
+        </Grid>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

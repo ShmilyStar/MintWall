@@ -1,0 +1,173 @@
+<UserControl x:Class="MintWall.Views.Sections.LibrarySection"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Border Style="{StaticResource Card}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Margin="0,0,0,10">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionTitle}"
+                               Text="{Binding Title, StringFormat=壁纸库 · {0}}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                        <TextBlock Text="目录" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBlock Text="{Binding LibraryDirText, Mode=OneWay}"
+                                   Style="{StaticResource Mono}"
+                                   MaxWidth="520"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="NoWrap" />
+                        <Border Style="{StaticResource ChipAccent}"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center"
+                                Visibility="{Binding IsBuiltInLibrary, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="内置" FontSize="11" TextWrapping="NoWrap" />
+                        </Border>
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Hint}"
+                               Text="可以“选择目录”改成自己的相册：里面的图（含子文件夹）直接当壁纸库用，能读能删，但程序不会自动清理你的文件夹。" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                    <Button Content="选择目录" Margin="0,0,8,0" Command="{Binding ChooseLibraryFolderCommand}" />
+                    <Button Content="恢复内置"
+                            Margin="0,0,8,0"
+                            Command="{Binding ResetLibraryFolderCommand}"
+                            Visibility="{Binding IsBuiltInLibrary, Converter={StaticResource InverseBoolToVis}}" />
+                    <Button Content="导入图片" Margin="0,0,8,0" Command="{Binding ImportLocalCommand}" />
+                    <Button Content="刷新" Margin="0,0,8,0" Command="{Binding RefreshCommand}" />
+                    <Button Content="打开目录" Command="{Binding OpenLibraryFolderCommand}" Margin="0" />
+                </StackPanel>
+            </Grid>
+
+            <Grid Grid.Row="1" Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid Margin="0,0,8,0">
+                    <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                    <TextBlock Text="按文件名筛选，例如 20261106"
+                               Foreground="{StaticResource BrushTextFaint}"
+                               FontSize="12.5"
+                               Margin="11,0,0,0"
+                               VerticalAlignment="Center"
+                               IsHitTestVisible="False"
+                               TextWrapping="NoWrap"
+                               Visibility="{Binding SearchText, Converter={StaticResource TextMissingToVis}}" />
+                </Grid>
+                <CheckBox Grid.Column="1"
+                          Content="只看收藏"
+                          IsChecked="{Binding FavoritesOnly}"
+                          VerticalAlignment="Center"
+                          Margin="0,0,12,0" />
+                <TextBlock Grid.Column="2"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource BrushTextDim}"
+                           FontSize="12"
+                           Text="{Binding LibraryCount, StringFormat=共 {0} 张}" />
+            </Grid>
+
+            <Border Grid.Row="2" Style="{StaticResource Inset}" MinHeight="240"
+                    MaxHeight="{Binding GalleryMaxHeight, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                <Grid>
+                    <ListBox x:Name="grid"
+                             ItemsSource="{Binding Library}"
+                             SelectedItem="{Binding SelectedLibraryItem}"
+                             ItemContainerStyle="{StaticResource ThumbItem}"
+                             MouseDoubleClick="Library_DoubleClick">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Width="196">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <Border Grid.Row="0" Height="110" CornerRadius="7" ClipToBounds="True" Background="#EAF4EF">
+                                        <Grid>
+                                            <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                                            <Border Background="#B32B4038"
+                                                  CornerRadius="4"
+                                                  Padding="5,1"
+                                                  Margin="6"
+                                                  HorizontalAlignment="Left"
+                                                  VerticalAlignment="Bottom">
+                                                <TextBlock Text="{Binding Dimensions}"
+                                                           FontSize="10.5"
+                                                           Foreground="#F2FBF7"
+                                                           TextWrapping="NoWrap" />
+                                            </Border>
+                                            <TextBlock Text="★"
+                                                       FontSize="15"
+                                                       Foreground="{StaticResource BrushStar}"
+                                                       Margin="7,5,0,0"
+                                                       HorizontalAlignment="Left"
+                                                       VerticalAlignment="Top"
+                                                       Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVis}}" />
+                                        </Grid>
+                                    </Border>
+
+                                    <StackPanel Grid.Row="1" Margin="2,6,2,0">
+                                        <TextBlock Text="{Binding FileName}"
+                                                   FontSize="11"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   TextWrapping="NoWrap" />
+                                        <TextBlock Text="{Binding SizeText}"
+                                                   FontSize="10.5"
+                                                   Foreground="{StaticResource BrushTextDim}"
+                                                   TextWrapping="NoWrap" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,5,0,2">
+                                        <Button Style="{StaticResource IconButton}"
+                                                ToolTip="设为本目标壁纸"
+                                                Command="{Binding DataContext.ApplyItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}">
+                                            <TextBlock Text="&#xE7F4;" FontFamily="{StaticResource IconFont}" FontSize="13" />
+                                        </Button>
+                                        <Button Style="{StaticResource IconButton}"
+                                                ToolTip="收藏 / 取消收藏"
+                                                Command="{Binding DataContext.ToggleFavoriteItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}">
+                                            <TextBlock Text="&#xE734;" FontFamily="{StaticResource IconFont}" FontSize="13" />
+                                        </Button>
+                                        <Button Style="{StaticResource IconButton}"
+                                                Margin="0"
+                                                ToolTip="删除这张"
+                                                Command="{Binding DataContext.DeleteItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}">
+                                            <TextBlock Text="&#xE74D;" FontFamily="{StaticResource IconFont}" FontSize="13" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <StackPanel HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Visibility="{Binding LibraryCount, Converter={StaticResource CountToVis}, ConverterParameter=empty}">
+                        <TextBlock Text="这个目标的库里还没有图片"
+                                   Foreground="{StaticResource BrushTextDim}"
+                                   HorizontalAlignment="Center" />
+                        <TextBlock Style="{StaticResource Hint}"
+                                   HorizontalAlignment="Center"
+                                   Text="点“导入图片”把本地照片加进来，或“选择目录”直接指到自己的相册；接口抓的图存进源的“保存位置”，不会自动进这里。" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

@@ -1,5 +1,5 @@
 ﻿<#
-  Builds Wallpaper Studio and produces a store-style MSIX package.
+  Builds MintWall and produces a store-style MSIX package.
   Nothing here needs Visual Studio or a machine-wide Windows SDK: makeappx/signtool come from the
   Microsoft.Windows.SDK.BuildTools NuGet package, and the .NET SDK can live in .tools\dotnet.
 #>
@@ -11,9 +11,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $root 'src\WallpaperStudio\WallpaperStudio.csproj'
+$project = Join-Path $root 'src\MintWall\MintWall.csproj'
 $manifest = Join-Path $root 'packaging\AppxManifest.xml'
-$assets = Join-Path $root 'src\WallpaperStudio\Assets'
+$assets = Join-Path $root 'src\MintWall\Assets'
 $build = Join-Path $root 'build'
 $publish = Join-Path $build 'publish'
 $staging = Join-Path $build 'staging'
@@ -61,7 +61,7 @@ if (-not $SkipMsix) {
 
     $makeappx = Join-Path $toolDir 'makeappx.exe'
     $signtool = Join-Path $toolDir 'signtool.exe'
-    $msix = Join-Path $dist "WallpaperStudio_${Version}_x64.msix"
+    $msix = Join-Path $dist "MintWall_${Version}_x64.msix"
 
     Write-Host "==> makeappx pack -> $msix"
     & $makeappx pack /d $staging /p $msix /o /v
@@ -83,11 +83,11 @@ if (-not $SkipMsix) {
     Write-Host ("==> 包已生成：{0}（{1:N1} MB）" -f $msix, ((Get-Item $msix).Length / 1MB))
 
     Write-Host '==> 生成一键安装包（含证书，双击 Install.cmd 即可）'
-    $installer = Join-Path $dist "WallpaperStudio_${Version}_installer_x64"
+    $installer = Join-Path $dist "MintWall_${Version}_installer_x64"
     if (Test-Path $installer) { Remove-Item $installer -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $installer | Out-Null
     Copy-Item $msix -Destination $installer
-    Copy-Item (Join-Path $root 'packaging\WallpaperStudio.cer') -Destination $installer
+    Copy-Item (Join-Path $root 'packaging\MintWall.cer') -Destination $installer
     Copy-Item (Join-Path $PSScriptRoot 'Install.cmd'), (Join-Path $PSScriptRoot 'Install.ps1') -Destination $installer
     $installerZip = "$installer.zip"
     if (Test-Path $installerZip) { Remove-Item $installerZip -Force }
@@ -96,7 +96,7 @@ if (-not $SkipMsix) {
 }
 
 Write-Host '==> 生成免安装便携版 zip'
-$zip = Join-Path $dist "WallpaperStudio_${Version}_portable_x64.zip"
+$zip = Join-Path $dist "MintWall_${Version}_portable_x64.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path (Join-Path $staging '*') -DestinationPath $zip
 Write-Host ("==> 便携包：{0}（{1:N1} MB）" -f $zip, ((Get-Item $zip).Length / 1MB))

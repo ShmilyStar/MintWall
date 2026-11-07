@@ -1,0 +1,180 @@
+<Window x:Class="MintWall.MainWindow"
+        x:Name="root"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:MintWall.Views"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="薄荷壁纸 · MintWall"
+        Icon="Assets/Square44x44Logo.png"
+        Background="{StaticResource BrushRail}"
+        Height="820" Width="1300"
+        MinHeight="640" MinWidth="1060"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        TextOptions.TextFormattingMode="Display"
+        UseLayoutRounding="True"
+        FontFamily="{StaticResource UiFont}"
+        FontSize="13">
+
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="38"
+                            ResizeBorderThickness="6"
+                            CornerRadius="0"
+                            GlassFrameThickness="0"
+                            UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+
+    <Border BorderBrush="{StaticResource BrushBorder}" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="38" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="228" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 自绘标题栏：系统「标题栏显示强调色」会覆盖 DWM 暗色，只能自己画 -->
+            <Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Background="{StaticResource BrushRail}"
+                    BorderBrush="{StaticResource BrushBorder}" BorderThickness="0,0,0,1">
+                <Grid>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                        <Image Source="Assets/Square44x44Logo.png" Width="16" Height="16" Margin="0,0,9,0" />
+                        <TextBlock Text="薄荷壁纸"
+                                   FontSize="12"
+                                   Foreground="{StaticResource BrushTextDim}"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="NoWrap" />
+                        <TextBlock Text="· MintWall"
+                                   FontSize="12"
+                                   Foreground="{StaticResource BrushTextFaint}"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="NoWrap" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                        <Button Style="{StaticResource CaptionButton}" ToolTip="最小化" Click="Minimize_Click">
+                            <TextBlock Style="{StaticResource CaptionGlyph}" Text="&#xE921;" />
+                        </Button>
+                        <Button x:Name="MaxButton" Style="{StaticResource CaptionButton}" ToolTip="最大化" Click="ToggleMaximize_Click">
+                            <TextBlock x:Name="MaxGlyph" Style="{StaticResource CaptionGlyph}" Text="&#xE922;" />
+                        </Button>
+                        <Button Style="{StaticResource CaptionCloseButton}" ToolTip="关闭" Click="Close_Click">
+                            <TextBlock Style="{StaticResource CaptionGlyph}" Text="&#xE8BB;" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+        <!-- 左侧导航栏 -->
+        <Border Grid.Row="1" Grid.Column="0" Background="{StaticResource BrushRail}"
+                BorderBrush="{StaticResource BrushBorder}" BorderThickness="0,0,1,0">
+            <DockPanel LastChildFill="True">
+
+                <StackPanel DockPanel.Dock="Top" Margin="18,14,14,14" Orientation="Horizontal">
+                    <Border Width="38" Height="38" CornerRadius="12" Background="{StaticResource BrushAccentSoft}"
+                            BorderBrush="#C7E9DD" BorderThickness="1">
+                        <Image Source="Assets/Square44x44Logo.png" Width="30" Height="30" />
+                    </Border>
+                    <StackPanel Margin="11,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="MintWall"
+                                   FontSize="14.5"
+                                   FontWeight="SemiBold"
+                                   TextWrapping="NoWrap" />
+                        <TextBlock Text="薄荷壁纸"
+                                   FontSize="11"
+                                   Foreground="{StaticResource BrushTextFaint}"
+                                   Margin="0,2,0,0"
+                                   TextWrapping="NoWrap" />
+                    </StackPanel>
+                </StackPanel>
+
+                <Border DockPanel.Dock="Bottom"
+                        BorderBrush="{StaticResource BrushBorder}"
+                        BorderThickness="0,1,0,0"
+                        Padding="16,12">
+                    <StackPanel>
+                        <Border Style="{StaticResource Chip}" Margin="0" HorizontalAlignment="Left" MaxWidth="190">
+                            <TextBlock Text="{Binding EngineText}"
+                                       FontSize="11"
+                                       Foreground="{StaticResource BrushTextDim}"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Border>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <TextBlock Text="●"
+                                       FontSize="10"
+                                       Foreground="{StaticResource BrushSuccess}"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding AppVersion}"
+                                       FontSize="11"
+                                       Foreground="{StaticResource BrushTextFaint}"
+                                       Margin="7,0,0,0"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="NoWrap" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <ListBox Style="{StaticResource NavList}"
+                         ItemsSource="{Binding NavItems}"
+                         SelectedItem="{Binding SelectedNavItem}" />
+            </DockPanel>
+        </Border>
+
+        <!-- 页面内容区 -->
+        <Grid Grid.Row="1" Grid.Column="1" Background="{StaticResource BrushWindow}">
+            <views:HomePage Visibility="{Binding CurrentPage, Converter={StaticResource PageVis}, ConverterParameter=home}" />
+            <views:DesktopPage Visibility="{Binding CurrentPage, Converter={StaticResource PageVis}, ConverterParameter=desktop}" />
+            <views:LockScreenPage Visibility="{Binding CurrentPage, Converter={StaticResource PageVis}, ConverterParameter=lock}" />
+            <views:DesktopLibraryPage Visibility="{Binding CurrentPage, Converter={StaticResource PageVis}, ConverterParameter=desktoplib}" />
+            <views:LockLibraryPage Visibility="{Binding CurrentPage, Converter={StaticResource PageVis}, ConverterParameter=locklib}" />
+            <views:DesktopSourcesPage Visibility="{Binding CurrentPage, Converter={StaticResource PageVis}, ConverterParameter=desktopsrc}" />
+            <views:LockSourcesPage Visibility="{Binding CurrentPage, Converter={StaticResource PageVis}, ConverterParameter=locksrc}" />
+            <views:SettingsPage Visibility="{Binding CurrentPage, Converter={StaticResource PageVis}, ConverterParameter=settings}" />
+            <views:DiagnosticsPage Visibility="{Binding CurrentPage, Converter={StaticResource PageVis}, ConverterParameter=diagnostics}" />
+        </Grid>
+
+        <!-- 底部状态栏：高度写死，忙碌时多出的“取消”按钮不会把它撑高，内容就不会上下跳。 -->
+        <Border Grid.Row="2"
+                Grid.Column="1"
+                Background="{StaticResource BrushCard}"
+                BorderBrush="{StaticResource BrushBorder}"
+                BorderThickness="0,1,0,0"
+                Height="42"
+                Padding="16,9">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding StatusText}"
+                           VerticalAlignment="Center"
+                           FontSize="12.5"
+                           TextTrimming="CharacterEllipsis"
+                           TextWrapping="NoWrap" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <StackPanel Orientation="Horizontal" Visibility="{Binding Busy, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="●"
+                                   Foreground="{StaticResource BrushAccent}"
+                                   Margin="0,0,6,0"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="任务进行中"
+                                   Foreground="{StaticResource BrushTextDim}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                    <Button Content="取消"
+                            Style="{StaticResource DangerButton}"
+                            Margin="10,0,0,0"
+                            Padding="10,3"
+                            MinHeight="24"
+                            Command="{Binding CancelOperationCommand}"
+                            Visibility="{Binding Busy, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+        </Grid>
+    </Border>
+</Window>

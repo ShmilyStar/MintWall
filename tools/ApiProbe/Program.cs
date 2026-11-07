@@ -25,7 +25,7 @@ internal static class Program
             {
                 Timeout = TimeSpan.FromSeconds(45),
             };
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 WallpaperStudio-Probe/1.0");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 MintWall-Probe/1.0");
             using HttpResponseMessage resp = client.GetAsync(url).GetAwaiter().GetResult();
             body = resp.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
             contentType = resp.Content.Headers.ContentType?.MediaType ?? "?";

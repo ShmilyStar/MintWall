@@ -1,6 +1,6 @@
 param(
-    [string]$Source = 'E:\Agent\Qoder\WallpaperStudio\src\WallpaperStudio\Assets\Logo1024.png',
-    [string]$Target = 'E:\Agent\Qoder\WallpaperStudio\src\WallpaperStudio\Assets\app.ico'
+    [string]$Source = 'E:\Agent\Qoder\WallpaperStudio\src\MintWall\Assets\Logo1024.png',
+    [string]$Target = 'E:\Agent\Qoder\WallpaperStudio\src\MintWall\Assets\app.ico'
 )
 Add-Type -AssemblyName System.Drawing
 

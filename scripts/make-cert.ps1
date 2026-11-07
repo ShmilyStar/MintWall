@@ -2,11 +2,11 @@
   Ensures a self-signed code-signing certificate exists for MSIX signing and prints its thumbprint on
   stdout (build.ps1 captures that value). Everything else goes to the host stream.
 #>
-param([string]$Subject = 'CN=WallpaperStudio Self-Signed', [int]$Years = 5)
+param([string]$Subject = 'CN=MintWall Self-Signed', [int]$Years = 5)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$cerPath = Join-Path $root 'packaging\WallpaperStudio.cer'
+$cerPath = Join-Path $root 'packaging\MintWall.cer'
 
 $existing = Get-ChildItem Cert:\CurrentUser\My |
     Where-Object { $_.Subject -eq $Subject -and $_.NotAfter -gt (Get-Date).AddDays(30) } |

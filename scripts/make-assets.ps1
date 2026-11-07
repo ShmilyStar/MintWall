@@ -1,7 +1,7 @@
 ﻿param([string]$Source)
 Add-Type -AssemblyName System.Drawing
 
-$dest = 'E:\Agent\Qoder\WallpaperStudio\src\WallpaperStudio\Assets'
+$dest = 'E:\Agent\Qoder\WallpaperStudio\src\MintWall\Assets'
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
 # 先复制到内存再释放文件句柄，否则最后回写同名 Logo1024.png 会报 GDI+ 错误

@@ -7,8 +7,8 @@ string[] candidates = args.Length > 0
     ? args
     : new[]
     {
-        @"C:\Users\Home\AppData\Local\WallpaperStudio\wallpapers\20261106-193338-820da4f5.jpg",
-        @"C:\Users\Home\AppData\Local\WallpaperStudio\thumbs",
+        @"C:\Users\Home\AppData\Local\MintWall\wallpapers\20261106-193338-820da4f5.jpg",
+        @"C:\Users\Home\AppData\Local\MintWall\thumbs",
     };
 
 foreach (string raw in candidates)
