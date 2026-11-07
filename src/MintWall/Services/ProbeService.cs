@@ -8,9 +8,11 @@ namespace MintWall.Services;
 /// <summary>
 /// Walks a candidate endpoint without touching the desktop, so a wrong URL is obvious before it is saved.
 /// </summary>
+public sealed record ProbeResult(string Report, byte[]? ImageBytes, int Width, int Height);
+
 public sealed class ProbeService
 {
-    public async Task<string> ProbeAsync(SourceProfile source, EncodePreference encode, CancellationToken ct)
+    public async Task<ProbeResult> ProbeAsync(SourceProfile source, EncodePreference encode, CancellationToken ct)
     {
         StringBuilder report = new();
         List<string> trace = new();
@@ -49,7 +51,7 @@ public sealed class ProbeService
         else
         {
             first = await ImageService.FetchAsync(source.Url, source.Headers, ct, trace).ConfigureAwait(false);
-            report.AppendLine($"第 1 跳：HTTP 200，Content-Type = {first.ContentType}，{ImageService.FormatSize(first.Body.Length)}");
+            report.AppendLine($"第 1 跳：HTTP {first.StatusCode}，Content-Type = {first.ContentType}，{ImageService.FormatSize(first.Body.Length)}");
         }
 
         report.AppendLine($"        最终地址 = {first.FinalUrl}");
@@ -77,7 +79,7 @@ public sealed class ProbeService
                 report.AppendLine();
                 report.AppendLine("JSON 片段：");
                 report.AppendLine(json.Length > 800 ? json[..800] + " …" : json);
-                return report.ToString();
+                return new ProbeResult(report.ToString(), null, 0, 0);
             }
 
             if (imageUrl is null)
@@ -86,7 +88,7 @@ public sealed class ProbeService
                 report.AppendLine();
                 report.AppendLine("JSON 片段：");
                 report.AppendLine(json.Length > 800 ? json[..800] + " …" : json);
-                return report.ToString();
+                return new ProbeResult(report.ToString(), null, 0, 0);
             }
 
             report.AppendLine($"        解析到图片链接 = {imageUrl}");
@@ -103,7 +105,7 @@ public sealed class ProbeService
             string preview = Encoding.UTF8.GetString(imageBytes, 0, Math.Min(imageBytes.Length, 400));
             report.AppendLine("内容前 400 字符：");
             report.AppendLine(preview);
-            return report.ToString();
+            return new ProbeResult(report.ToString(), null, 0, 0);
         }
 
         bool hasAlpha = bitmap.Info.AlphaType != SKAlphaType.Opaque && format is not ("jpg" or "jpeg" or "bmp");
@@ -119,6 +121,6 @@ public sealed class ProbeService
         report.AppendLine($"        尺寸 = {bitmap.Width} × {bitmap.Height}");
         report.AppendLine($"        原始格式 = {format}，入库格式 = {saved}");
         report.AppendLine($"        提示 = {(bitmap.Width >= 1920 ? "分辨率足够" : "分辨率偏低，全屏可能会有锯齿")}");
-        return report.ToString();
+        return new ProbeResult(report.ToString(), imageBytes, bitmap.Width, bitmap.Height);
     }
 }

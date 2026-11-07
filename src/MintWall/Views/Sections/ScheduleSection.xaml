@@ -16,7 +16,8 @@
                            Text="{Binding Title, StringFormat=定时 · {0}}" />
                 <TextBlock Style="{StaticResource Hint}"
                            Margin="0,0,0,10"
-                           Text="每个目标各有独立定时器，只在程序运行时生效。" />
+                           TextWrapping="Wrap"
+                           Text="{Binding ScheduleHint}" />
 
                 <CheckBox Content="启用定时自动换壁纸"
                           Style="{StaticResource ToggleSwitch}"
@@ -38,7 +39,9 @@
                          HorizontalAlignment="Left"
                          Margin="0,4,0,6" />
 
-                <Border Style="{StaticResource Inset}" MinWidth="168">
+                <Border Style="{StaticResource Inset}"
+                        MinWidth="168"
+                        Visibility="{Binding ShowNextRun, Converter={StaticResource BoolToVis}}">
                     <StackPanel>
                         <TextBlock Text="下一次执行" Style="{StaticResource StatLabel}" Margin="0,0,0,4" />
                         <TextBlock Text="{Binding NextRunText}" FontSize="15" FontWeight="SemiBold" TextWrapping="NoWrap" />

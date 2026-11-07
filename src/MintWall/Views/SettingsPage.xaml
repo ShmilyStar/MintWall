@@ -27,7 +27,6 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource SettingCard}">
@@ -50,17 +49,6 @@
 
                 <Border Grid.Row="0" Grid.Column="2" Style="{StaticResource SettingCard}">
                     <StackPanel>
-                        <TextBlock Text="目录" Style="{StaticResource SectionTitle}" />
-                        <StackPanel Orientation="Horizontal">
-                            <Button Content="打开数据目录" Margin="0,0,8,0" Command="{Binding OpenDataFolderCommand}" />
-                            <Button Content="桌面库" Margin="0,0,8,0" Command="{Binding Desktop.OpenLibraryFolderCommand}" />
-                            <Button Content="锁屏库" Command="{Binding Lock.OpenLibraryFolderCommand}" Margin="0" />
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-
-                <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource SettingCard}">
-                    <StackPanel>
                         <TextBlock Text="入库格式" Style="{StaticResource SectionTitle}" />
                         <ComboBox ItemsSource="{Binding EncodeOptions}"
                                   SelectedValuePath="Key"
@@ -79,7 +67,7 @@
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource SettingCard}">
+                <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource SettingCard}">
                     <StackPanel>
                         <TextBlock Text="桌面壁纸填充方式" Style="{StaticResource SectionTitle}" />
                         <ComboBox ItemsSource="{Binding StyleOptions}"
@@ -99,7 +87,7 @@
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource SettingCard}">
+                <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource SettingCard}">
                     <StackPanel>
                         <TextBlock Text="壁纸库上限" Style="{StaticResource SectionTitle}" />
                         <StackPanel Orientation="Horizontal">
@@ -114,7 +102,7 @@
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Row="2" Grid.Column="2" Style="{StaticResource SettingCard}">
+                <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource SettingCard}">
                     <StackPanel>
                         <TextBlock Text="开机自启" Style="{StaticResource SectionTitle}" />
                         <CheckBox Content="随 Windows 登录自动启动"
@@ -125,10 +113,10 @@
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Row="3" Grid.Column="0" Style="{StaticResource SettingCard}">
+                <Border Grid.Row="2" Grid.Column="2" Style="{StaticResource SettingCard}">
                     <StackPanel>
                         <TextBlock Text="关于" Style="{StaticResource SectionTitle}" />
-                        <TextBlock Text="{Binding AppVersion, StringFormat='MintWall {0}'}" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBlock Text="{Binding AppTitle}" FontWeight="SemiBold" Margin="0,0,0,4" />
                         <TextBlock Style="{StaticResource Hint}"
                                    Text="WPF + SkiaSharp，桌面走 SystemParametersInfo / IDesktopWallpaper，锁屏走 Windows.System.UserProfile.LockScreen。" />
                         <TextBlock Style="{StaticResource Hint}"

@@ -12,37 +12,25 @@
                                Text="这里的源只属于本目标，和另一个目标互不共用。" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                    <Button Content="从锁屏复制"
+                            Margin="0,0,8,0"
+                            Command="{Binding CopySourcesFromLockCommand}"
+                            Visibility="{Binding IsLock, Converter={StaticResource InverseBoolToVis}}" />
                     <Button Content="从桌面复制"
                             Margin="0,0,8,0"
                             Command="{Binding CopySourcesFromDesktopCommand}"
                             Visibility="{Binding IsLock, Converter={StaticResource BoolToVis}}" />
-                    <Button Content="添加源"
+                    <Button Content="添加"
                             Style="{StaticResource AccentButton}"
-                            Margin="0"
+                            Margin="0,0,8,0"
                             Command="{Binding AddSourceCommand}" />
+                    <Button Content="编辑" Margin="0,0,8,0" Command="{Binding EditSourceCommand}" />
+                    <Button Content="测试" Margin="0,0,8,0" Command="{Binding TestSourceCommand}" />
+                    <Button Content="删除"
+                            Style="{StaticResource DangerButton}"
+                            Margin="0"
+                            Command="{Binding RemoveSourceCommand}" />
                 </StackPanel>
-            </Grid>
-
-            <Grid DockPanel.Dock="Bottom" Margin="0,10,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Button Grid.Column="0" Content="编辑" Margin="0,0,8,0" Command="{Binding EditSourceCommand}" />
-                <Button Grid.Column="1"
-                        Content="设为当前"
-                        Margin="0,0,8,0"
-                        Command="{Binding ActivateSourceCommand}"
-                        CommandParameter="{Binding SelectedSource}" />
-                <Button Grid.Column="2" Content="测试此源" Margin="0,0,8,0" Command="{Binding TestSourceCommand}" />
-                <Button Grid.Column="3"
-                        Content="删除"
-                        Style="{StaticResource DangerButton}"
-                        HorizontalAlignment="Right"
-                        Margin="0"
-                        Command="{Binding RemoveSourceCommand}" />
             </Grid>
 
             <Grid MinHeight="150">
@@ -50,6 +38,8 @@
                     <ColumnDefinition Width="290" />
                     <ColumnDefinition Width="12" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="280" />
                 </Grid.ColumnDefinitions>
 
                 <Border Grid.Column="0" Style="{StaticResource Inset}" Padding="6">
@@ -67,12 +57,31 @@
                                             <TextBlock Text="{Binding Name}"
                                                        FontWeight="SemiBold"
                                                        TextTrimming="CharacterEllipsis"
-                                                       TextWrapping="NoWrap" />
+                                                       TextWrapping="NoWrap">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Enabled}" Value="False">
+                                                                <Setter Property="Foreground" Value="{StaticResource BrushTextFaint}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
                                             <TextBlock Text="{Binding Url}"
-                                                       Style="{StaticResource Mono}"
                                                        Margin="0,2,0,0"
                                                        TextTrimming="CharacterEllipsis"
-                                                       TextWrapping="NoWrap" />
+                                                       TextWrapping="NoWrap">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Mono}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Enabled}" Value="False">
+                                                                <Setter Property="Foreground" Value="{StaticResource BrushTextFaint}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
                                         </StackPanel>
                                         <Border Grid.Column="1"
                                                 Style="{StaticResource ChipAccent}"
@@ -82,11 +91,11 @@
                                             <TextBlock Text="存盘" FontSize="11" TextWrapping="NoWrap" />
                                         </Border>
                                         <Border Grid.Column="2"
-                                                Style="{StaticResource ChipAccent}"
+                                                Style="{StaticResource ChipWarn}"
                                                 VerticalAlignment="Center"
                                                 Margin="8,0,0,0"
-                                                Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVis}}">
-                                            <TextBlock Text="当前" FontSize="11" TextWrapping="NoWrap" />
+                                                Visibility="{Binding Enabled, Converter={StaticResource InverseBoolToVis}}">
+                                            <TextBlock Text="停用" FontSize="11" TextWrapping="NoWrap" />
                                         </Border>
                                     </Grid>
                                 </DataTemplate>
@@ -99,7 +108,7 @@
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
                                    Visibility="{Binding SourceCount, Converter={StaticResource CountToVis}, ConverterParameter=empty}"
-                                   Text="还没有壁纸源，“换一张”会先用系统本机的 Windows 聚焦图；点右上角“添加源”就换成你自己的。" />
+                                   Text="还没有壁纸源，“换一张”会先用系统本机的 Windows 聚焦图；点左下角“添加”就换成你自己的。" />
                     </Grid>
                 </Border>
 
@@ -143,8 +152,15 @@
                             </Grid>
                         </Grid>
                         <StackPanel Margin="0,8,0,0">
+                            <CheckBox Content="启用此源"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding SelectedSource.Enabled, Mode=TwoWay}" />
+                            <TextBlock Style="{StaticResource Hint}"
+                                       Margin="0,6,0,0"
+                                       Text="停用后“换一张”和定时器会跳过这个源；手动测试和右侧预览仍然可用。" />
                             <CheckBox Content="自动保存抓到的图"
                                       Style="{StaticResource ToggleSwitch}"
+                                      Margin="0,10,0,0"
                                       IsChecked="{Binding SelectedSource.AutoSave}" />
                             <TextBlock Style="{StaticResource Hint}"
                                        Margin="0,6,0,0"
@@ -164,7 +180,7 @@
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding SaveDirText, Mode=OneWay}"
                                                    Style="{StaticResource Mono}"
-                                                   MaxWidth="330"
+                                                   MaxWidth="250"
                                                    VerticalAlignment="Center"
                                                    TextTrimming="CharacterEllipsis"
                                                    TextWrapping="NoWrap" />
@@ -192,7 +208,7 @@
                         </StackPanel>
                         <TextBlock Style="{StaticResource Hint}"
                                    Margin="0,8,0,0"
-                                   Text="改完建议先“测试此源”，确认能取到图片再换壁纸，避免把画面换成一张错误页。" />
+                                   Text="改完建议先点“测试”，确认能取到图片再换壁纸，避免把画面换成一张错误页。" />
                     </StackPanel>
 
                     <TextBlock Style="{StaticResource Hint}"
@@ -200,6 +216,54 @@
                                Text="在左边选一个源查看详情。"
                                Visibility="{Binding HasSelectedSource, Converter={StaticResource InverseBoolToVis}}" />
                 </StackPanel>
+
+                <Border Grid.Column="4"
+                        Style="{StaticResource Inset}"
+                        Padding="10"
+                        Margin="2,0,0,0"
+                        Visibility="{Binding HasSelectedSource, Converter={StaticResource BoolToVis}}">
+                    <DockPanel>
+                        <Grid DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
+                                <TextBlock Text="源预览" Style="{StaticResource FieldLabel}" />
+                                <TextBlock Text="{Binding SourcePreviewDetail}"
+                                           Style="{StaticResource Mono}"
+                                           FontSize="11"
+                                           TextWrapping="Wrap"
+                                           Visibility="{Binding SourcePreviewDetail, Converter={StaticResource TextPresentToVis}}" />
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    Content="刷新预览"
+                                    Margin="0"
+                                    Command="{Binding RefreshSourcePreviewCommand}" />
+                        </Grid>
+
+                        <Border Background="{StaticResource BrushCard}"
+                                BorderBrush="{StaticResource BrushBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                ClipToBounds="True">
+                            <Grid>
+                                <Image Source="{Binding SourcePreview}"
+                                       Stretch="Uniform"
+                                       Margin="6"
+                                       Visibility="{Binding HasSourcePreview, Converter={StaticResource BoolToVis}}" />
+                                <TextBlock Text="{Binding SourcePreviewStatus}"
+                                           Style="{StaticResource Hint}"
+                                           Margin="16"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           TextAlignment="Center"
+                                           TextWrapping="Wrap"
+                                           Visibility="{Binding HasSourcePreview, Converter={StaticResource InverseBoolToVis}}" />
+                            </Grid>
+                        </Border>
+                    </DockPanel>
+                </Border>
             </Grid>
         </DockPanel>
     </Border>

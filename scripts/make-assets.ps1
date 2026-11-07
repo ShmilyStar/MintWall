@@ -40,4 +40,25 @@ foreach ($t in $targets) {
     $bmp.Dispose()
     Write-Output ('wrote ' + $t.Name + ' ' + $t.W + 'x' + $t.H)
 }
+
+# 开始菜单/任务栏/搜索使用 targetsize 变体；缺少 unplated 时系统会自动加一块底色板。
+# 旧文件先清掉，避免尺寸变更后残留。
+Get-ChildItem $dest -Filter 'Square44x44Logo.targetsize-*' | Remove-Item -Force
+$targetSizes = 16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 80, 96, 256
+$variants = '', '_altform-unplated', '_altform-lightunplated'
+foreach ($size in $targetSizes) {
+    foreach ($variant in $variants) {
+        $bmp = New-Object System.Drawing.Bitmap $size, $size
+        $g = [System.Drawing.Graphics]::FromImage($bmp)
+        $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+        $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+        $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+        $g.DrawImage($src, (New-Object System.Drawing.Rectangle 0, 0, $size, $size), (New-Object System.Drawing.Rectangle 0, 0, $src.Width, $src.Height), [System.Drawing.GraphicsUnit]::Pixel)
+        $g.Dispose()
+        $name = "Square44x44Logo.targetsize-$size$variant.png"
+        $bmp.Save((Join-Path $dest $name), [System.Drawing.Imaging.ImageFormat]::Png)
+        $bmp.Dispose()
+        Write-Output ('wrote ' + $name + ' ' + $size + 'x' + $size)
+    }
+}
 $src.Dispose()

@@ -82,7 +82,7 @@
                 <TextBlock Text="命令行（不开窗口也能用，适合脚本和计划任务）" Style="{StaticResource SectionTitle}" />
                 <TextBox Style="{StaticResource Report}"
                          MaxHeight="120"
-                         Text="MintWall.exe probe &lt;url&gt;        只探测接口，返回链路、Content-Type、尺寸，不动桌面&#10;MintWall.exe auto [url]            按当前源或指定 url 取图并应用&#10;MintWall.exe set &lt;图片路径&gt;      用本地图片应用&#10;MintWall.exe list                    列出壁纸源、显示器与壁纸库&#10;MintWall.exe help                    查看全部参数&#10;三个命令都支持 --target desktop|lock（默认 desktop），桌面与锁屏各自取各自的源和库。" />
+                         Text="MintWall.exe probe &lt;url&gt;        只探测接口，返回链路、Content-Type、尺寸，不动桌面&#10;MintWall.exe auto [url]            从启用的源里随机取图并应用&#10;MintWall.exe set &lt;图片路径&gt;      用本地图片应用&#10;MintWall.exe list                    列出壁纸源、显示器与壁纸库&#10;MintWall.exe help                    查看全部参数&#10;三个命令都支持 --target desktop|lock（默认 desktop），桌面与锁屏各自取各自的源和库。" />
             </StackPanel>
         </Border>
     </Grid>

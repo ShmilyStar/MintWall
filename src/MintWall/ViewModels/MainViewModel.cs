@@ -51,9 +51,11 @@ public partial class MainViewModel : ObservableObject
 
         Desktop = new TargetWorkspace(this, false);
         Lock = new TargetWorkspace(this, true);
+        SystemEvents.SessionSwitch += OnSessionSwitch;
 
         RefreshMonitors();
         MigrateLooseLibraries();
+        RepairNestedSavePaths();
         RepairMovedWallpaperPath();
 
         _currentPage = MigratePage(Settings.LastPage);
@@ -115,7 +117,7 @@ public partial class MainViewModel : ObservableObject
     private string _statusText = string.Empty;
 
     [ObservableProperty]
-    private string _probeReport = "还没有测试过接口。在“桌面”或“锁屏”页选中一个源后点“测试此源”，这里会显示跳转链路、Content-Type、尺寸和入库格式。";
+    private string _probeReport = "还没有测试过接口。在“桌面壁纸源”或“锁屏壁纸源”页选中一个源后点“测试”，这里会显示跳转链路、Content-Type、尺寸和入库格式。";
 
     [ObservableProperty]
     private string _engineText = string.Empty;
@@ -140,7 +142,11 @@ public partial class MainViewModel : ObservableObject
 
     public string DataLocation => DataPaths.Root;
 
+    public string AppName => Branding.DisplayName;
+
     public string AppVersion => "v" + (typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "0.0.0");
+
+    public string AppTitle => $"{AppName} {AppVersion}";
 
     public bool IsPackaged => DataPaths.IsPackaged;
 
@@ -382,9 +388,37 @@ public partial class MainViewModel : ObservableObject
 
     public void Shutdown()
     {
+        SystemEvents.SessionSwitch -= OnSessionSwitch;
         _cts?.Cancel();
         Desktop.Stop();
         Lock.Stop();
+    }
+
+    /// <summary>会话锁定/解锁回调来自系统事件线程，切回界面线程再动定时器。</summary>
+    private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
+    {
+        if (e.Reason is not (SessionSwitchReason.SessionLock or SessionSwitchReason.SessionUnlock))
+        {
+            return;
+        }
+
+        bool locked = e.Reason == SessionSwitchReason.SessionLock;
+
+        void Apply()
+        {
+            Lock.NotifySessionLocked(locked);
+            Log(locked ? "会话已锁定，锁屏定时开始计时。" : "会话已解锁，锁屏定时暂停。");
+        }
+
+        System.Windows.Threading.Dispatcher? dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            Apply();
+        }
+        else
+        {
+            dispatcher.BeginInvoke(new Action(Apply));
+        }
     }
 
     private string MigratePage(string? stored)
@@ -451,6 +485,39 @@ public partial class MainViewModel : ObservableObject
         if (File.Exists(candidate))
         {
             _wallpaper.Apply(candidate, Wallpapers.AllMonitors, _wallpaper.ReadStyle());
+        }
+    }
+
+    /// <summary>
+    /// 旧版整屏保存目录多套了一层 desktop\desktop / lock\lock。文件已经被搬回上一层，
+    /// 这里把配置里记录的上次应用路径跟着改掉，否则预览会指向不存在的文件。
+    /// </summary>
+    private void RepairNestedSavePaths()
+    {
+        bool changed = false;
+
+        foreach (MonitorSettings profile in Settings.Desktop.Monitors.Concat(Settings.Lock.Monitors))
+        {
+            foreach ((string from, string to) in new[]
+            {
+                (Path.Combine(DataPaths.SaveDir, "desktop", "desktop"), Path.Combine(DataPaths.SaveDir, "desktop")),
+                (Path.Combine(DataPaths.SaveDir, "lock", "lock"), Path.Combine(DataPaths.SaveDir, "lock")),
+            })
+            {
+                string prefix = from + Path.DirectorySeparatorChar;
+                if (!profile.LastApplied.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                profile.LastApplied = Path.Combine(to, profile.LastApplied[prefix.Length..]);
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            Persist();
         }
     }
 

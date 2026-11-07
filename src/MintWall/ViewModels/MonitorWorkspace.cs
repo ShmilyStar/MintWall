@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows.Media;
@@ -21,7 +22,10 @@ public partial class MonitorWorkspace : ObservableObject
     private LibraryService _library;
     private readonly ProbeService _probe = new();
     private readonly DispatcherTimer _timer = new();
+    private bool _sessionLocked;
     private CancellationTokenSource? _thumbCts;
+    private CancellationTokenSource? _sourcePreviewCts;
+    private bool _sourcePreviewAttempted;
 
     public MonitorWorkspace(MainViewModel host, bool isLock, MonitorSettings data)
     {
@@ -30,6 +34,7 @@ public partial class MonitorWorkspace : ObservableObject
         Data = data;
         _library = new LibraryService(DataPaths.ResolveLibraryDir(isLock, data));
 
+        Sources.CollectionChanged += Sources_CollectionChanged;
         foreach (SourceProfile source in Data.Sources)
         {
             Sources.Add(source);
@@ -37,7 +42,6 @@ public partial class MonitorWorkspace : ObservableObject
 
         // 构造期直接写后备字段：此时界面还没绑定，避免触发 OnXxxChanged 反过来写盘。
         _selectedSource = Sources.FirstOrDefault(s => s.Id == Data.ActiveSourceId) ?? Sources.FirstOrDefault();
-        SyncSourceFlags();
 
         _style = Data.Style;
         _scheduleEnabled = Data.Schedule.Enabled;
@@ -56,6 +60,13 @@ public partial class MonitorWorkspace : ObservableObject
     public bool IsLock { get; }
 
     public string TargetTitle => IsLock ? "锁屏" : "桌面";
+
+    /// <summary>锁屏界面不展示“下一次执行时间”，只有桌面目标显示。</summary>
+    public bool ShowNextRun => !IsLock;
+
+    public string ScheduleHint => IsLock
+        ? "锁屏定时只在会话锁定后开始计时，解锁即暂停，下次锁定重新计时。"
+        : "每个目标各有独立定时器，只在程序运行时生效。";
 
     public MonitorSettings Data { get; }
 
@@ -160,19 +171,33 @@ public partial class MonitorWorkspace : ObservableObject
     [ObservableProperty]
     private string _message = string.Empty;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSourcePreview))]
+    private ImageSource? _sourcePreview;
+
+    [ObservableProperty]
+    private string _sourcePreviewStatus = "选一个源查看预览";
+
+    [ObservableProperty]
+    private string _sourcePreviewDetail = string.Empty;
+
     public bool HasSelectedSource => SelectedSource is not null;
 
     public bool HasPreview => Preview is not null;
 
-    public bool CanUseOwnSource => Sources.Count > 0;
+    public bool HasSourcePreview => SourcePreview is not null;
+
+    public bool CanUseOwnSource => Sources.Any(source => source.Enabled);
 
     public int SourceCount => Sources.Count;
+
+    public int EnabledSourceCount => Sources.Count(source => source.Enabled);
 
     public int LibraryCount => Library.Count;
 
     /// <summary>有没有能用的换图来源（内置始终算能用）。</summary>
     public bool HasFetchChannel =>
-        FetchFromBuiltIn || (FetchFromLibrary && Library.Count > 0) || (FetchFromSources && Sources.Count > 0);
+        FetchFromBuiltIn || (FetchFromLibrary && Library.Count > 0) || (FetchFromSources && EnabledSourceCount > 0);
 
     [RelayCommand]
     private async Task FetchAsync() => await FetchAsync(auto: false);
@@ -208,10 +233,128 @@ public partial class MonitorWorkspace : ObservableObject
 
         await _host.RunAsync($"正在测试「{source.Name}」…", async token =>
         {
-            _host.ProbeReport = await _probe.ProbeAsync(source, _host.Encode, token);
-            _host.StatusText = $"「{source.Name}」测试完成，详见“诊断”页。";
+            ProbeResult result = await _probe.ProbeAsync(source, _host.Encode, token);
+            _host.ProbeReport = result.Report;
+
+            if (result.ImageBytes is { Length: > 0 } bytes)
+            {
+                await ShowSourcePreviewAsync(source, bytes, result.Width, result.Height, token);
+                _host.StatusText = $"「{source.Name}」测试完成，预览已更新，详见“诊断”页。";
+            }
+            else
+            {
+                SourcePreview = null;
+                SourcePreviewDetail = string.Empty;
+                SourcePreviewStatus = "测试没取到可预览的图片，原因见“诊断”页";
+                _host.StatusText = $"「{source.Name}」测试完成，但没取到图片，详见“诊断”页。";
+            }
+
             _host.Log($"测试接口：{source.Name}（{Title}）");
         });
+    }
+
+    /// <summary>打开壁纸源页面时补一张预览，启动阶段不提前占用网络。</summary>
+    public void EnsureSourcePreview()
+    {
+        if (!_sourcePreviewAttempted && SelectedSource is { } source)
+        {
+            _ = LoadSourcePreviewAsync(source, quiet: true);
+        }
+    }
+
+    [RelayCommand]
+    private Task RefreshSourcePreviewAsync() =>
+        SelectedSource is { } source ? LoadSourcePreviewAsync(source, quiet: false) : Task.CompletedTask;
+
+    /// <summary>取一张该源的样片放进右边的预览框；样片只留在缓存，不写入壁纸库。</summary>
+    private async Task LoadSourcePreviewAsync(SourceProfile source, bool quiet)
+    {
+        _sourcePreviewAttempted = true;
+        _sourcePreviewCts?.Cancel();
+        CancellationTokenSource cts = new();
+        _sourcePreviewCts = cts;
+
+        if (quiet && !source.Enabled)
+        {
+            SourcePreview = null;
+            SourcePreviewDetail = string.Empty;
+            SourcePreviewStatus = "该源已停用，点“刷新预览”仍可临时取一张看看";
+            return;
+        }
+
+        SourcePreview = null;
+        SourcePreviewDetail = string.Empty;
+        SourcePreviewStatus = $"正在从「{source.Name}」取一张预览…";
+
+        try
+        {
+            string dir = Path.Combine(DataPaths.CacheDirFor(IsLock), "preview");
+            AcquiredImage acquired = await ImageService.AcquireAsync(source, dir, EncodePreference.Jpeg, cts.Token);
+            ImageSource? image = await Task.Run(() => ThumbnailStore.TryLoad(acquired.FilePath, 900), cts.Token);
+            TryDelete(acquired.FilePath);
+
+            if (cts.IsCancellationRequested || !ReferenceEquals(SelectedSource, source))
+            {
+                return;
+            }
+
+            SourcePreview = image;
+            SourcePreviewStatus = image is null ? "取到了图片，但预览解码失败" : string.Empty;
+            SourcePreviewDetail = $"{acquired.Width} × {acquired.Height} · {ImageService.FormatSize(acquired.Bytes)}";
+        }
+        catch (OperationCanceledException)
+        {
+            // 换选了别的源，这次预览作废。
+        }
+        catch (Exception ex)
+        {
+            if (!cts.IsCancellationRequested && ReferenceEquals(SelectedSource, source))
+            {
+                SourcePreviewStatus = "预览失败：" + ex.Message;
+            }
+        }
+    }
+
+    /// <summary>把“测试”刚取到的图直接放进预览框，不重新请求一次。</summary>
+    private async Task ShowSourcePreviewAsync(SourceProfile source, byte[] body, int width, int height, CancellationToken token)
+    {
+        _sourcePreviewCts?.Cancel();
+        CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        _sourcePreviewCts = cts;
+
+        string file = Path.Combine(DataPaths.CacheDirFor(IsLock), "preview", $"{Guid.NewGuid():N}.img");
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            await File.WriteAllBytesAsync(file, body, cts.Token);
+            ImageSource? image = await Task.Run(() => ThumbnailStore.TryLoad(file, 900), cts.Token);
+            if (cts.IsCancellationRequested || !ReferenceEquals(SelectedSource, source))
+            {
+                return;
+            }
+
+            SourcePreview = image;
+            SourcePreviewStatus = image is null ? "取到了图片，但预览解码失败" : string.Empty;
+            SourcePreviewDetail = $"{width} × {height} · {ImageService.FormatSize(body.Length)}";
+        }
+        finally
+        {
+            TryDelete(file);
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 
     [RelayCommand]
@@ -243,39 +386,60 @@ public partial class MonitorWorkspace : ObservableObject
         Save();
     }
 
-    [RelayCommand]
-    private void ActivateSource(SourceProfile? source)
-    {
-        if (source is null)
-        {
-            return;
-        }
-
-        SelectedSource = source;
-        _host.StatusText = $"{Title}的当前源已切换为“{source.Name}”。";
-    }
-
     /// <summary>锁屏页专用：把同一块屏在桌面那一侧的源列表复制过来，省去重复录入。</summary>
     [RelayCommand]
-    private void CopySourcesFromDesktop()
+    private void CopySourcesFromDesktop() => CopySourcesFrom(_host.Desktop, "桌面");
+
+    [RelayCommand]
+    private void CopySourcesFromLock() => CopySourcesFrom(_host.Lock, "锁屏");
+
+    private void CopySourcesFrom(TargetWorkspace target, string label)
     {
-        MonitorWorkspace? donor = _host.Desktop.ForMonitor(MonitorId) ?? _host.Desktop.Selected;
-        if (donor is null)
+        MonitorWorkspace? donor = target.ForMonitor(MonitorId) ?? target.Selected;
+        if (donor is null || donor.Sources.Count == 0)
         {
-            _host.StatusText = "桌面还没有可复制的壁纸源。";
+            _host.StatusText = $"{label}还没有可复制的壁纸源。";
             return;
         }
 
+        int added = 0;
+        int skipped = 0;
         foreach (SourceProfile source in donor.Sources)
         {
+            if (Sources.Any(existing => IsSameSource(existing, source)))
+            {
+                skipped++;
+                continue;
+            }
+
             Sources.Add(source.Clone());
+            added++;
         }
 
-        SelectedSource = Sources.Count > 0 ? Sources[^1] : null;
-        _host.StatusText = $"已把{donor.Title}的 {donor.Sources.Count} 个源复制到{Title}，之后两边互不影响。";
-        _host.Log($"复制源：{donor.Title} → {Title}");
+        if (added == 0)
+        {
+            _host.StatusText = $"{label}里的源都已经在{Title}里了，没有新增。";
+            return;
+        }
+
+        SelectedSource = Sources[^1];
+        string skipNote = skipped > 0 ? $"，跳过 {skipped} 个重复项" : string.Empty;
+        _host.StatusText = $"已把{donor.Title}的 {added} 个源复制到{Title}{skipNote}，之后两边互不影响。";
+        _host.Log($"复制源：{donor.Title} → {Title}（新增 {added}，重复 {skipped}）");
         RaiseCounts();
         Save();
+    }
+
+    private static bool IsSameSource(SourceProfile left, SourceProfile right)
+    {
+        string leftUrl = left.Url.Trim();
+        string rightUrl = right.Url.Trim();
+        if (leftUrl.Length > 0 || rightUrl.Length > 0)
+        {
+            return string.Equals(leftUrl, rightUrl, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return string.Equals(left.Name.Trim(), right.Name.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
     [RelayCommand]
@@ -462,9 +626,14 @@ public partial class MonitorWorkspace : ObservableObject
             channel = FetchChannel.BuiltIn;
         }
 
-        SourceProfile source = channel == FetchChannel.BuiltIn
-            ? BingService.BuiltInSource()
-            : ResolveRandomSource() ?? BingService.BuiltInSource();
+        SourceProfile? picked = channel == FetchChannel.Sources ? ResolveRandomSource() : null;
+        if (channel == FetchChannel.Sources && picked is null)
+        {
+            // 启用的源刚好被停用了，退回内置必应。
+            channel = FetchChannel.BuiltIn;
+        }
+
+        SourceProfile source = picked ?? BingService.BuiltInSource();
         string from = channel == FetchChannel.BuiltIn ? "必应每日壁纸" : $"「{source.Name}」";
 
         await _host.RunAsync($"正在为{Title}从{from}获取…", async token =>
@@ -546,9 +715,14 @@ public partial class MonitorWorkspace : ObservableObject
             existing.JsonFieldPath = edited.JsonFieldPath;
             existing.Headers = edited.Headers;
             existing.AutoSave = edited.AutoSave;
+            existing.Enabled = edited.Enabled;
         }
 
         SelectedSource = Sources.FirstOrDefault(s => s.Id == edited.Id);
+        if (SelectedSource is { } saved)
+        {
+            _ = LoadSourcePreviewAsync(saved, quiet: true);
+        }
         _host.StatusText = $"已{(isNew ? "添加" : "更新")}{Title}的壁纸源“{edited.Name}”，建议先到“诊断”测一次。";
         _host.Log($"{(isNew ? "新增" : "更新")}{Title}壁纸源“{edited.Name}”。");
         RaiseCounts();
@@ -645,9 +819,22 @@ public partial class MonitorWorkspace : ObservableObject
 
     public void StartSchedule() => SyncTimer();
 
+    /// <summary>锁屏定时从会话锁定那一刻开始计时；解锁立即停表，等下次锁定重新开始。</summary>
+    public void NotifySessionLocked(bool locked)
+    {
+        if (!IsLock || _sessionLocked == locked)
+        {
+            return;
+        }
+
+        _sessionLocked = locked;
+        SyncTimer();
+    }
+
     public void Stop()
     {
         _thumbCts?.Cancel();
+        _sourcePreviewCts?.Cancel();
         _timer.Stop();
     }
 
@@ -700,6 +887,7 @@ public partial class MonitorWorkspace : ObservableObject
     /// <summary>勾选的来源里随机挑一个能用的；每次都随机，不按顺序。</summary>
     private FetchChannel ResolveChannel()
     {
+        bool hasEnabledSources = EnabledSourceCount > 0;
         List<FetchChannel> enabled = new(3);
         if (FetchFromBuiltIn)
         {
@@ -711,14 +899,14 @@ public partial class MonitorWorkspace : ObservableObject
             enabled.Add(FetchChannel.Library);
         }
 
-        if (FetchFromSources && Sources.Count > 0)
+        if (FetchFromSources && hasEnabledSources)
         {
             enabled.Add(FetchChannel.Sources);
         }
 
         if (enabled.Count == 0)
         {
-            return Sources.Count > 0 ? FetchChannel.Sources : FetchChannel.BuiltIn;
+            return hasEnabledSources ? FetchChannel.Sources : FetchChannel.BuiltIn;
         }
 
         return enabled[Random.Shared.Next(enabled.Count)];
@@ -743,20 +931,21 @@ public partial class MonitorWorkspace : ObservableObject
         return pool[Random.Shared.Next(pool.Count)];
     }
 
-    /// <summary>多个壁纸源时随机挑一个，尽量不和当前选中的那个重复。</summary>
+    /// <summary>启用的壁纸源里随机挑一个，尽量不和当前选中的那个重复。</summary>
     private SourceProfile? ResolveRandomSource()
     {
-        if (Sources.Count == 0)
+        List<SourceProfile> usable = Sources.Where(source => source.Enabled).ToList();
+        if (usable.Count == 0)
         {
             return null;
         }
 
-        if (Sources.Count == 1)
+        if (usable.Count == 1)
         {
-            return Sources[0];
+            return usable[0];
         }
 
-        List<SourceProfile> pool = Sources
+        List<SourceProfile> pool = usable
             .Where(source => !ReferenceEquals(source, SelectedSource))
             .ToList();
         SelectedSource = pool[Random.Shared.Next(pool.Count)];
@@ -766,22 +955,56 @@ public partial class MonitorWorkspace : ObservableObject
     private void RaiseCounts()
     {
         OnPropertyChanged(nameof(SourceCount));
+        OnPropertyChanged(nameof(EnabledSourceCount));
         OnPropertyChanged(nameof(LibraryCount));
         OnPropertyChanged(nameof(CanUseOwnSource));
+        OnPropertyChanged(nameof(HasFetchChannel));
         _host.RaiseCounts();
     }
 
-    private void SyncSourceFlags()
+    private void Sources_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
-        foreach (SourceProfile source in Sources)
+        if (e.NewItems is not null)
         {
-            source.IsCurrent = ReferenceEquals(source, SelectedSource);
+            foreach (SourceProfile source in e.NewItems)
+            {
+                source.PropertyChanged += Source_PropertyChanged;
+            }
+        }
+
+        if (e.OldItems is not null)
+        {
+            foreach (SourceProfile source in e.OldItems)
+            {
+                source.PropertyChanged -= Source_PropertyChanged;
+            }
+        }
+    }
+
+    private void Source_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(SourceProfile.Enabled) || sender is not SourceProfile source)
+        {
+            return;
+        }
+
+        RaiseCounts();
+        SyncTimer();
+        Save();
+        _host.StatusText = $"{Title}的源“{source.Name}”已{(source.Enabled ? "启用" : "停用")}。";
+        _host.Log(_host.StatusText);
+
+        if (ReferenceEquals(source, SelectedSource))
+        {
+            _ = LoadSourcePreviewAsync(source, quiet: true);
         }
     }
 
     private void SyncTimer()
     {
-        if (ScheduleEnabled && HasFetchChannel)
+        bool counting = !IsLock || _sessionLocked;
+
+        if (ScheduleEnabled && HasFetchChannel && counting)
         {
             _timer.Interval = TimeSpan.FromMinutes(Math.Clamp(ScheduleIntervalMinutes, 1, 43200));
             _timer.Start();
@@ -790,18 +1013,37 @@ public partial class MonitorWorkspace : ObservableObject
         else
         {
             _timer.Stop();
-            NextRunText = ScheduleEnabled ? "没有可用的换图来源，定时器未启动" : "未启用";
+
+            if (!ScheduleEnabled)
+            {
+                NextRunText = "未启用";
+            }
+            else if (!HasFetchChannel)
+            {
+                NextRunText = "没有可用的换图来源，定时器未启动";
+            }
+            else
+            {
+                NextRunText = "锁定后开始计时";
+            }
         }
     }
 
     partial void OnSelectedSourceChanged(SourceProfile? value)
     {
-        SyncSourceFlags();
         if (value is not null)
         {
             Data.ActiveSourceId = value.Id;
             RaiseCounts();
             Save();
+            _ = LoadSourcePreviewAsync(value, quiet: true);
+        }
+        else
+        {
+            _sourcePreviewCts?.Cancel();
+            SourcePreview = null;
+            SourcePreviewDetail = string.Empty;
+            SourcePreviewStatus = "选一个源查看预览";
         }
     }
 

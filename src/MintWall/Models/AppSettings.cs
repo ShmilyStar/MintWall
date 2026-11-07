@@ -30,10 +30,9 @@ public partial class SourceProfile : ObservableObject
     [ObservableProperty]
     private bool _autoSave;
 
-    /// <summary>Drives the “当前” badge in the source list; the workspace keeps exactly one set.</summary>
+    /// <summary>停用后“换一张”和定时器会跳过这个源，手动测试与预览仍然可用。</summary>
     [ObservableProperty]
-    [property: JsonIgnore]
-    private bool _isCurrent;
+    private bool _enabled = true;
 
     public SourceProfile Clone() => new()
     {
@@ -44,6 +43,7 @@ public partial class SourceProfile : ObservableObject
         JsonFieldPath = JsonFieldPath,
         Headers = Headers,
         AutoSave = AutoSave,
+        Enabled = Enabled,
     };
 
     public override string ToString() => Name;

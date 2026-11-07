@@ -70,10 +70,6 @@
                             <WrapPanel Grid.Row="1" Margin="8,10,8,10">
                                 <Border Style="{StaticResource Chip}">
                                     <TextBlock Style="{StaticResource StatLabel}"
-                                               Text="{Binding Lock.Selected.NextRunText, StringFormat=定时 {0}}" />
-                                </Border>
-                                <Border Style="{StaticResource Chip}">
-                                    <TextBlock Style="{StaticResource StatLabel}"
                                                Text="{Binding Lock.Selected.LibraryCount, StringFormat=库 {0} 张}" />
                                 </Border>
                                 <Border Style="{StaticResource Chip}" Margin="0">

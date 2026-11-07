@@ -24,6 +24,7 @@ public static class CliRunner
                 "set" => await SetAsync(args),
                 "auto" => await AutoAsync(args),
                 "list" => List(args),
+                "uninstall" or "--uninstall" or "purge" => Uninstall(),
                 "help" or "-h" or "--help" => Help(),
                 _ => Unknown(verb),
             };
@@ -51,9 +52,12 @@ public static class CliRunner
               set <图片路径> [--target desktop|lock] [--screen 1] [--monitor all|<id>] [--style fill|fit|stretch|center|tile|span]
                   把本地图片导入该屏的壁纸库并设为壁纸。
               auto [--target desktop|lock] [--screen 1] [--source <名称或ID>]
-                  按该屏当前激活源（或指定源）取一张并应用，等同定时任务执行的一次动作。
+                  从该屏启用的源里随机取一张并应用，等同定时任务执行的一次动作。
               list [--target desktop|lock]
                   列出每块屏的壁纸源、各自的壁纸库、保存位置与显示器状态。
+              uninstall
+                  删除默认数据目录（设置、壁纸库、缓存、缩略图、保存归档）和开机自启；
+                  用户自选的壁纸库/保存目录保持不动。
               说明：--target 缺省 desktop；--screen 选第几块屏（序号、名称或 id 片段），缺省第 1 块。
                     桌面、锁屏和每块屏各自维护壁纸源与壁纸库，互不影响。
             """);
@@ -112,7 +116,8 @@ public static class CliRunner
 
         EncodePreference encode = ParseEncode(Option(args, "--encode") ?? "auto");
         ProbeService probe = new();
-        Console.WriteLine(await probe.ProbeAsync(source, encode, CancellationToken.None));
+        ProbeResult result = await probe.ProbeAsync(source, encode, CancellationToken.None);
+        Console.WriteLine(result.Report);
 
         if (args.Contains("--apply"))
         {
@@ -163,10 +168,9 @@ public static class CliRunner
         LibraryService library = new(LibraryDirOf(lockTarget, profile));
 
         string? selector = Option(args, "--source");
+        List<SourceProfile> enabled = profile.Sources.Where(s => s.Enabled).ToList();
         SourceProfile? source = selector is null
-            ? profile.Sources.FirstOrDefault(s => s.Id == profile.ActiveSourceId)
-                ?? profile.Sources.FirstOrDefault()
-                ?? BingService.BuiltInSource()
+            ? (enabled.Count > 0 ? enabled[Random.Shared.Next(enabled.Count)] : BingService.BuiltInSource())
             : profile.Sources.FirstOrDefault(s => s.Id == selector || s.Name.Equals(selector, StringComparison.OrdinalIgnoreCase));
 
         if (source is null)
@@ -212,6 +216,12 @@ public static class CliRunner
     private static bool IsLockTarget(string[] args) =>
         string.Equals(Option(args, "--target"), "lock", StringComparison.OrdinalIgnoreCase);
 
+    private static int Uninstall()
+    {
+        Console.WriteLine("正在清理 MintWall 数据…");
+        return UninstallService.Purge() ? 0 : 1;
+    }
+
     private static int List(string[] args)
     {
         AppSettings settings = new ConfigStore().Load();
@@ -246,9 +256,9 @@ public static class CliRunner
 
             foreach (SourceProfile source in profile.Sources)
             {
-                string active = source.Id == profile.ActiveSourceId ? " ← 当前" : string.Empty;
                 string keep = source.AutoSave ? "  [自动保存]" : string.Empty;
-                Console.WriteLine($"  {source.Name}  [{source.Kind}]  {source.Url}{active}{keep}");
+                string disabled = source.Enabled ? string.Empty : "  [已停用]";
+                Console.WriteLine($"  {source.Name}  [{source.Kind}]  {source.Url}{keep}{disabled}");
             }
 
             if (profile.Sources.Count == 0)

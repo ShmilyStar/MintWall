@@ -78,7 +78,14 @@ public static class DataPaths
 
     public static string SaveDirFor(bool lockScreen, string monitorId)
     {
-        string dir = Path.Combine(SaveDir, lockScreen ? "lock" : "desktop", KeyFor(lockScreen, monitorId));
+        string targetDir = lockScreen ? "lock" : "desktop";
+        string key = KeyFor(lockScreen, monitorId);
+
+        // 整屏统一目标直接用 saved\desktop / saved\lock，不再套一层同名子目录。
+        string dir = string.Equals(key, targetDir, StringComparison.Ordinal)
+            ? Path.Combine(SaveDir, targetDir)
+            : Path.Combine(SaveDir, targetDir, key);
+
         EnsureDirectory(dir);
         return dir;
     }
@@ -103,8 +110,12 @@ public static class DataPaths
     {
         MoveFilesIfMissing(Path.Combine(DesktopWallpaperDir, "all"), Path.Combine(DesktopWallpaperDir, "desktop"));
         MoveFilesIfMissing(Path.Combine(LockWallpaperDir, "all"), Path.Combine(LockWallpaperDir, "lock"));
-        MoveFilesIfMissing(Path.Combine(SaveDir, "desktop", "all"), Path.Combine(SaveDir, "desktop", "desktop"));
-        MoveFilesIfMissing(Path.Combine(SaveDir, "lock", "all"), Path.Combine(SaveDir, "lock", "lock"));
+
+        // 1.4.0 之前整屏目标曾落到 saved\desktop\desktop，文件搬回上一层并删掉重复目录。
+        MoveFilesIfMissing(Path.Combine(SaveDir, "desktop", "all"), Path.Combine(SaveDir, "desktop"));
+        MoveFilesIfMissing(Path.Combine(SaveDir, "lock", "all"), Path.Combine(SaveDir, "lock"));
+        MoveFilesIfMissing(Path.Combine(SaveDir, "desktop", "desktop"), Path.Combine(SaveDir, "desktop"));
+        MoveFilesIfMissing(Path.Combine(SaveDir, "lock", "lock"), Path.Combine(SaveDir, "lock"));
     }
 
     private static void MoveFilesIfMissing(string from, string to)

@@ -14,6 +14,7 @@ public partial class TargetWorkspace : ObservableObject
 {
     private readonly MainViewModel _host;
     private readonly Dictionary<string, MonitorWorkspace> _byMonitorId = new(StringComparer.Ordinal);
+    private bool _sessionLocked;
 
     public TargetWorkspace(MainViewModel host, bool isLock)
     {
@@ -53,6 +54,16 @@ public partial class TargetWorkspace : ObservableObject
 
     /// <summary>顶栏 tab 下方那句“能不能真的逐屏下发”的说明。</summary>
     public string PerMonitorNotice => _host.PerMonitorNotice;
+
+    /// <summary>会话锁定时，锁屏目标的定时器才开始计时；桌面目标不受影响。</summary>
+    public void NotifySessionLocked(bool locked)
+    {
+        _sessionLocked = locked;
+        foreach (MonitorWorkspace workspace in Monitors)
+        {
+            workspace.NotifySessionLocked(locked);
+        }
+    }
 
     [RelayCommand]
     public void Refresh()
@@ -170,6 +181,7 @@ public partial class TargetWorkspace : ObservableObject
             if (!_byMonitorId.TryGetValue(screen.Id, out MonitorWorkspace? workspace))
             {
                 workspace = new MonitorWorkspace(_host, IsLock, data);
+                workspace.NotifySessionLocked(_sessionLocked);
                 _byMonitorId[screen.Id] = workspace;
             }
 

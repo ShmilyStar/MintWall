@@ -13,7 +13,7 @@
   <mp:PhoneIdentity PhoneProductId="6f0e2c1a-9d5b-4f4a-8f4e-2b7c1d9e3a11" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
 
   <Properties>
-    <DisplayName>薄荷壁纸 MintWall</DisplayName>
+    <DisplayName>ms-resource:AppDisplayName</DisplayName>
     <PublisherDisplayName>MintWall (self-signed)</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
     <Description>本地图片与 API 接口双链路的 Windows 壁纸工具</Description>
@@ -30,14 +30,15 @@
 
   <Applications>
     <Application Id="MintWall" Executable="MintWall.exe" EntryPoint="Windows.FullTrustApplication">
-      <uap:VisualElements DisplayName="薄荷壁纸 MintWall"
+      <uap:VisualElements DisplayName="ms-resource:AppDisplayName"
                           Description="导入本地图片或从 API 接口换壁纸，支持定时、多显示器与收藏库。"
-                          BackgroundColor="#EFF8F4"
+                          AppListEntry="none"
+                          BackgroundColor="#9BDEE3"
                           Square150x150Logo="Assets\Square150x150Logo.png"
                           Square44x44Logo="Assets\Square44x44Logo.png">
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png"
                          Square310x310Logo="Assets\Square310x310Logo.png"
-                         ShortName="薄荷壁纸">
+                         ShortName="ms-resource:AppShortName">
           <uap:ShowNameOnTiles>
             <uap:ShowOn Tile="square150x150Logo" />
             <uap:ShowOn Tile="wide310x150Logo" />

@@ -29,12 +29,14 @@ public static class ImageService
     private const string UserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 MintWall/1.0";
 
+    private const int MaxRedirects = 10;
+
     private static HttpClient CreateClient()
     {
+        // 自己跟随跳转：.NET 默认拒绝 https → http 的降级重定向，而部分壁纸站正是这么跳的。
         HttpClientHandler handler = new()
         {
-            AllowAutoRedirect = true,
-            MaxAutomaticRedirections = 10,
+            AllowAutoRedirect = false,
             UseCookies = true,
             CookieContainer = new CookieContainer(),
         };
@@ -124,28 +126,62 @@ public static class ImageService
 
     public static async Task<FetchResult> FetchAsync(string url, string? headersText, CancellationToken ct, List<string>? trace = null)
     {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
+        Uri current = ParseUri(url);
+
+        for (int hop = 0; hop <= MaxRedirects; hop++)
+        {
+            using HttpRequestMessage request = new(HttpMethod.Get, current);
+            ApplyHeaders(request, headersText);
+
+            using HttpResponseMessage response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+
+            if (IsRedirect(response.StatusCode) && response.Headers.Location is { } location)
+            {
+                Uri next = location.IsAbsoluteUri ? location : new Uri(current, location);
+                if (next.Scheme != Uri.UriSchemeHttp && next.Scheme != Uri.UriSchemeHttps)
+                {
+                    throw new HttpRequestException($"接口跳转到了不支持的地址：{next}");
+                }
+
+                trace?.Add($"{(int)response.StatusCode} 跳转 → {next}");
+                current = next;
+                continue;
+            }
+
+            byte[] body = await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+            string contentType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+            string finalUrl = response.RequestMessage?.RequestUri?.ToString() ?? current.ToString();
+
+            trace?.Add($"{(int)response.StatusCode} {contentType} {FormatSize(body.LongLength)}  {finalUrl}");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException($"接口返回 {(int)response.StatusCode}（{finalUrl}）");
+            }
+
+            return new FetchResult(body, contentType, finalUrl, (int)response.StatusCode);
+        }
+
+        throw new HttpRequestException($"跳转次数超过 {MaxRedirects} 次（起始地址 {url}）");
+    }
+
+    private static Uri ParseUri(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
             throw new ArgumentException($"不是合法的 http(s) 地址：{url}");
         }
 
-        using HttpRequestMessage request = new(HttpMethod.Get, uri);
-        ApplyHeaders(request, headersText);
-
-        using HttpResponseMessage response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-        byte[] body = await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
-        string contentType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
-        string finalUrl = response.RequestMessage?.RequestUri?.ToString() ?? url;
-
-        trace?.Add($"{(int)response.StatusCode} {contentType} {FormatSize(body.LongLength)}  {finalUrl}");
-
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new HttpRequestException($"接口返回 {(int)response.StatusCode}（{finalUrl}）");
-        }
-
-        return new FetchResult(body, contentType, finalUrl, (int)response.StatusCode);
+        return uri;
     }
+
+    private static bool IsRedirect(HttpStatusCode status) => status is
+        HttpStatusCode.MovedPermanently or
+        HttpStatusCode.Found or
+        HttpStatusCode.SeeOther or
+        HttpStatusCode.TemporaryRedirect or
+        HttpStatusCode.PermanentRedirect;
 
     public static string FormatSize(long bytes) => bytes switch
     {

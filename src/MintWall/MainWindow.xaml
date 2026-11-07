@@ -4,7 +4,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:MintWall.Views"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-        Title="薄荷壁纸 · MintWall"
+        Title="{Binding AppName}"
         Icon="Assets/Square44x44Logo.png"
         Background="{StaticResource BrushRail}"
         Height="820" Width="1300"
@@ -42,14 +42,9 @@
                 <Grid>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
                         <Image Source="Assets/Square44x44Logo.png" Width="16" Height="16" Margin="0,0,9,0" />
-                        <TextBlock Text="薄荷壁纸"
+                        <TextBlock Text="{Binding AppName}"
                                    FontSize="12"
                                    Foreground="{StaticResource BrushTextDim}"
-                                   VerticalAlignment="Center"
-                                   TextWrapping="NoWrap" />
-                        <TextBlock Text="· MintWall"
-                                   FontSize="12"
-                                   Foreground="{StaticResource BrushTextFaint}"
                                    VerticalAlignment="Center"
                                    TextWrapping="NoWrap" />
                     </StackPanel>
@@ -75,21 +70,13 @@
             <DockPanel LastChildFill="True">
 
                 <StackPanel DockPanel.Dock="Top" Margin="18,14,14,14" Orientation="Horizontal">
-                    <Border Width="38" Height="38" CornerRadius="12" Background="{StaticResource BrushAccentSoft}"
-                            BorderBrush="#C7E9DD" BorderThickness="1">
-                        <Image Source="Assets/Square44x44Logo.png" Width="30" Height="30" />
-                    </Border>
-                    <StackPanel Margin="11,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="MintWall"
-                                   FontSize="14.5"
-                                   FontWeight="SemiBold"
-                                   TextWrapping="NoWrap" />
-                        <TextBlock Text="薄荷壁纸"
-                                   FontSize="11"
-                                   Foreground="{StaticResource BrushTextFaint}"
-                                   Margin="0,2,0,0"
-                                   TextWrapping="NoWrap" />
-                    </StackPanel>
+                    <Image Source="Assets/Square44x44Logo.png" Width="38" Height="38" />
+                    <TextBlock Text="{Binding AppName}"
+                               Margin="11,0,0,0"
+                               VerticalAlignment="Center"
+                               FontSize="14.5"
+                               FontWeight="SemiBold"
+                               TextWrapping="NoWrap" />
                 </StackPanel>
 
                 <Border DockPanel.Dock="Bottom"

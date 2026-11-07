@@ -16,6 +16,14 @@ public static class StartupService
         key?.DeleteValue(LegacyValueName, throwOnMissingValue: false);
     }
 
+    /// <summary>卸载时清掉开机自启，不留指向已删除 exe 的 Run 项。</summary>
+    public static void Remove()
+    {
+        using RegistryKey? key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+        key?.DeleteValue(ValueName, throwOnMissingValue: false);
+        key?.DeleteValue(LegacyValueName, throwOnMissingValue: false);
+    }
+
     public static bool IsEnabled()
     {
         using RegistryKey? key = Registry.CurrentUser.OpenSubKey(RunKey);

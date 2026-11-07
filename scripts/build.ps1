@@ -51,6 +51,8 @@ if (-not (Test-Path $assets)) { throw "缺少图标资源目录 $assets，请先
 $stagingAssets = Join-Path $staging 'Assets'
 New-Item -ItemType Directory -Force -Path $stagingAssets | Out-Null
 Copy-Item -Path (Join-Path $assets '*') -Destination $stagingAssets -Force
+# 包名跟系统语言走：清单里写 ms-resource 引用，真正的中/英文本放在 Strings 下编进 resources.pri
+Copy-Item -Path (Join-Path $root 'packaging\Strings') -Destination $staging -Recurse -Force
 
 if (-not $SkipMsix) {
     $toolDir = Join-Path $toolsRoot 'msix-tools'
@@ -60,8 +62,13 @@ if (-not $SkipMsix) {
     }
 
     $makeappx = Join-Path $toolDir 'makeappx.exe'
+    $makepri = Join-Path $toolDir 'makepri.exe'
     $signtool = Join-Path $toolDir 'signtool.exe'
     $msix = Join-Path $dist "MintWall_${Version}_x64.msix"
+
+    Write-Host '==> makepri 生成本地化 resources.pri'
+    & $makepri new /pr $staging /cf (Join-Path $root 'packaging\priconfig.xml') /of (Join-Path $staging 'resources.pri') /mn (Join-Path $staging 'AppxManifest.xml') /o
+    if ($LASTEXITCODE -ne 0) { throw "makepri 失败（$LASTEXITCODE）" }
 
     Write-Host "==> makeappx pack -> $msix"
     & $makeappx pack /d $staging /p $msix /o /v
@@ -89,6 +96,7 @@ if (-not $SkipMsix) {
     Copy-Item $msix -Destination $installer
     Copy-Item (Join-Path $root 'packaging\MintWall.cer') -Destination $installer
     Copy-Item (Join-Path $PSScriptRoot 'Install.cmd'), (Join-Path $PSScriptRoot 'Install.ps1') -Destination $installer
+    Copy-Item (Join-Path $PSScriptRoot 'Uninstall.cmd'), (Join-Path $PSScriptRoot 'Uninstall.ps1') -Destination $installer
     $installerZip = "$installer.zip"
     if (Test-Path $installerZip) { Remove-Item $installerZip -Force }
     Compress-Archive -Path (Join-Path $installer '*') -DestinationPath $installerZip
@@ -98,6 +106,8 @@ if (-not $SkipMsix) {
 Write-Host '==> 生成免安装便携版 zip'
 $zip = Join-Path $dist "MintWall_${Version}_portable_x64.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
+# 便携版也带一份卸载脚本：清数据但保留用户自选目录。
+Copy-Item (Join-Path $PSScriptRoot 'Uninstall.cmd'), (Join-Path $PSScriptRoot 'Uninstall.ps1') -Destination $staging -Force
 Compress-Archive -Path (Join-Path $staging '*') -DestinationPath $zip
 Write-Host ("==> 便携包：{0}（{1:N1} MB）" -f $zip, ((Get-Item $zip).Length / 1MB))
 
