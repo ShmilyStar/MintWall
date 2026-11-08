@@ -60,9 +60,29 @@ public static class DataPaths
     {
         string real = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MintWall");
-        if (!Directory.Exists(real) || Directory.Exists(target))
+        if (!Directory.Exists(real))
         {
             return;
+        }
+
+        if (Directory.Exists(target))
+        {
+            // 便携 zip 预置了空的 data 目录，空目录仍要把旧数据搬进来；有内容才视为已经用过。
+            if (Directory.EnumerateFileSystemEntries(target).Any())
+            {
+                return;
+            }
+
+            try
+            {
+                Directory.Delete(target, recursive: false);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
         }
 
         try

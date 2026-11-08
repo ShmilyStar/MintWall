@@ -112,14 +112,25 @@ $exeAsset = Join-Path $dist "MintWall_${Version}_win-x64.exe"
 Copy-Item (Join-Path $singleFile 'MintWall.exe') $exeAsset -Force
 Write-Host ("==> 单文件主程序：{0}（{1:N1} MB）" -f $exeAsset, ((Get-Item $exeAsset).Length / 1MB))
 
-Write-Host '==> 生成免安装便携版 zip（根目录仅主程序，运行后数据进 data 子文件夹）'
+Write-Host '==> 生成免安装便携版 zip（根目录：MintWall.exe + 预置 data 子文件夹）'
 $zip = Join-Path $dist "MintWall_${Version}_portable_x64.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
 $portable = Join-Path $build 'portable'
 if (Test-Path $portable) { Remove-Item $portable -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $portable | Out-Null
 Copy-Item $exeAsset (Join-Path $portable 'MintWall.exe') -Force
+New-Item -ItemType Directory -Force -Path (Join-Path $portable 'data') | Out-Null
 Compress-Archive -Path (Join-Path $portable '*') -DestinationPath $zip
+# Compress-Archive 会丢掉空目录，手动补上 data 目录条目
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive = [System.IO.Compression.ZipFile]::Open($zip, [System.IO.Compression.ZipArchiveMode]::Update)
+try {
+    if (-not ($archive.Entries | Where-Object { $_.FullName -eq 'data/' })) {
+        $archive.CreateEntry('data/') | Out-Null
+    }
+} finally {
+    $archive.Dispose()
+}
 Write-Host ("==> 便携包：{0}（{1:N1} MB）" -f $zip, ((Get-Item $zip).Length / 1MB))
 
 Write-Host '完成。'

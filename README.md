@@ -54,7 +54,7 @@
 | --- | --- |
 | `MintWall_x.y.z_installer_x64.zip` | 一键安装包，解压后双击 `Install.cmd`（含自签证书） |
 | `MintWall_x.y.z_x64.msix` | 原始安装包，需先信任 `packaging/MintWall.cer` |
-| `MintWall_x.y.z_portable_x64.zip` | 免安装便携版，解压后根目录只有 `MintWall.exe`；运行后配置/缓存/库自动放进 exe 旁的 `data` 子文件夹，整目录可拷走 |
+| `MintWall_x.y.z_portable_x64.zip` | 免安装便携版，解压后根目录为 `MintWall.exe` + 空的 `data` 子文件夹；配置/缓存/壁纸库/缩略图/日志都写进 `data`，整目录可拷走 |
 | `MintWall_x.y.z_win-x64.exe` | 单文件版，双击即用 |
 
 > MSIX 使用自签名证书，首次安装需要信任包内证书；`Install.cmd` 会自动完成。
