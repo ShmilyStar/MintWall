@@ -40,23 +40,13 @@ Write-Host ("==> 状态：" + $pkg.Status)
 
 $appId = "$($pkg.PackageFamilyName)!MintWall"
 
-# Win10 搜索/开始菜单对打包应用强制加纯色底板；改用 Win32 快捷方式入口可显示无底板图标。
-# 清单已设 AppListEntry="none" 隐藏自带入口，这里补一个同名快捷方式。
-$displayName = if ((Get-Culture).Name -like 'zh*') { '薄荷壁纸' } else { 'MintWall' }
+# 旧版用 Win32 快捷方式绕过开始菜单底板，但升级后图标路径失效、右键也没有卸载项。
+# 现在用包自带入口（图标随当前包解析、右键可卸载），这里只清理历史遗留快捷方式。
 $programs = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
 foreach ($old in '薄荷壁纸', 'MintWall') {
     Remove-Item (Join-Path $programs "$old.lnk") -Force -ErrorAction SilentlyContinue
 }
-$lnk = Join-Path $programs "$displayName.lnk"
-$ico = Join-Path $pkg.InstallLocation 'Assets\app.ico'
-$shell = New-Object -ComObject WScript.Shell
-$shortcut = $shell.CreateShortcut($lnk)
-$shortcut.TargetPath = 'explorer.exe'
-$shortcut.Arguments = "shell:AppsFolder\$appId"
-$shortcut.IconLocation = "$ico,0"
-$shortcut.Description = $displayName
-$shortcut.Save()
-Write-Host "==> 已创建开始菜单快捷方式：$displayName"
+Write-Host '==> 开始菜单使用应用包自带入口'
 
 Start-Process explorer.exe -ArgumentList "shell:AppsFolder\$appId"
 Write-Host '==> 已启动 MintWall'

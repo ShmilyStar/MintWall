@@ -110,6 +110,8 @@
                                   IsChecked="{Binding StartWithWindows}" />
                         <TextBlock Style="{StaticResource Hint}"
                                    Text="便携版写入当前用户的启动项；MSIX 版交给系统管理，卸载时一并移除。定时换壁纸需要程序一直运行。" />
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0"
+                                   Text="点 × 的行为：开启开机自启时只隐藏窗口，后台静默继续换图，再点程序图标恢复窗口；未开启时点 × 直接退出程序。" />
                     </StackPanel>
                 </Border>
 

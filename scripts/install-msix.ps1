@@ -72,10 +72,16 @@ catch {
 }
 
 $pkg = Get-AppxPackage -Name 'MintWall.Desktop'
-# 清单里 AppListEntry=none，Get-StartApps 查不到，启动标识只能按 Application Id 拼。
 $aumid = "$($pkg.PackageFamilyName)!MintWall"
+
+# 清理旧版遗留的开始菜单快捷方式：图标指向旧包目录会发白，右键也没有卸载项。
+$programs = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
+foreach ($old in '薄荷壁纸', 'MintWall') {
+    Remove-Item (Join-Path $programs "$old.lnk") -Force -ErrorAction SilentlyContinue
+}
+
 Write-Host ''
 Write-Host "==> 安装成功：$($pkg.PackageFullName)"
 Write-Host "==> 启动标识：$aumid"
 Write-Host "==> 命令行启动：explorer.exe ""shell:AppsFolder\$aumid"""
-Write-Host '开始菜单快捷方式由 Install.ps1 创建；这里只注册包。'
+Write-Host '==> 开始菜单使用应用包自带入口（右键可卸载）'

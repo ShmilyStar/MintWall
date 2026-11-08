@@ -1,7 +1,9 @@
+using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using MintWall.Models;
+using MintWall.Services;
 using MintWall.ViewModels;
 
 namespace MintWall;
@@ -11,6 +13,9 @@ public partial class MainWindow : Window
     private static readonly string[] ImageExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp" };
 
     private readonly MainViewModel _viewModel = new();
+
+    private bool _exiting;
+    private bool _decidingClose;
 
     public MainWindow()
     {
@@ -30,6 +35,45 @@ public partial class MainWindow : Window
         WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        if (_exiting)
+        {
+            base.OnClosing(e);
+            return;
+        }
+
+        e.Cancel = true;
+        if (!_decidingClose)
+        {
+            _decidingClose = true;
+            _ = CloseOrHideAsync();
+        }
+    }
+
+    private async Task CloseOrHideAsync()
+    {
+        // IsEnabled 内部是 WinRT 同步等待，放在 UI 线程上会和 dispatcher 续延死锁。
+        bool startup;
+        try
+        {
+            startup = await Task.Run(StartupService.IsEnabled);
+        }
+        finally
+        {
+            _decidingClose = false;
+        }
+
+        if (startup)
+        {
+            Hide();
+            return;
+        }
+
+        _exiting = true;
+        Close();
+    }
 
     private void UpdateMaximizeGlyph()
     {
