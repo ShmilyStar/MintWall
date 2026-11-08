@@ -10,15 +10,22 @@ public static class DataPaths
     static DataPaths()
     {
         IsPackaged = DetectPackaged();
-        string baseDir = IsPackaged
-            ? Windows.Storage.ApplicationData.Current.LocalFolder.Path
-            : Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        string target = Path.Combine(baseDir, "MintWall");
+        string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        string target;
         if (IsPackaged)
         {
-            MigrateRealLocalToContainer(target);
+            target = Path.Combine(Windows.Storage.ApplicationData.Current.LocalFolder.Path, "MintWall");
+            MigrateLocalRoot(target);
+            MigrateLegacyRoot(Path.GetDirectoryName(target)!);
         }
-        MigrateLegacyRoot(baseDir);
+        else
+        {
+            // 便携版数据跟着主程序走：根目录只留一个 exe，配置/缓存/库全进 data 子文件夹，整目录可拷走。
+            string exeDir = Path.GetDirectoryName(Environment.ProcessPath) ?? local;
+            target = Path.Combine(exeDir, "data");
+            MigrateLegacyRoot(local);
+            MigrateLocalRoot(target);
+        }
         Root = target;
         DesktopWallpaperDir = Path.Combine(Root, "wallpapers");
         LockWallpaperDir = Path.Combine(Root, "wallpapers-lock");
@@ -48,8 +55,8 @@ public static class DataPaths
     /// <summary>迁移到容器/新根目录没成功时置位；卸载清理据此保留真实目录，避免把没搬走的数据删掉。</summary>
     public static bool MigrationIncomplete { get; private set; }
 
-    /// <summary>打包版早期把数据写在真实 LocalAppData，系统卸载带不走；首次进容器时整体搬进去。</summary>
-    private static void MigrateRealLocalToContainer(string target)
+    /// <summary>真实 LocalAppData 里的旧根整体搬进新根（容器或便携 data 目录）；搬不动时置位，卸载清理据此保留旧目录。</summary>
+    private static void MigrateLocalRoot(string target)
     {
         string real = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MintWall");
@@ -61,6 +68,30 @@ public static class DataPaths
         try
         {
             Directory.Move(real, target);
+            return;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            MigrationIncomplete = true;
+            return;
+        }
+        catch (IOException)
+        {
+            // 跨盘符（旧数据在 C:，便携目录可能在 E: 等）Move 会失败，退化为复制后删旧。
+        }
+
+        // 先复制到临时目录再整体改名，避免复制一半失败时新根里留下半套数据。
+        string staging = target + ".migrating";
+        try
+        {
+            if (Directory.Exists(staging))
+            {
+                Directory.Delete(staging, recursive: true);
+            }
+
+            CopyDirectory(real, staging);
+            Directory.Move(staging, target);
+            Directory.Delete(real, recursive: true);
         }
         catch (IOException)
         {
@@ -72,20 +103,44 @@ public static class DataPaths
         }
     }
 
-    /// <summary>包内运行时，配置里指向真实 LocalAppData 老根的路径一律改写到容器，保留相对子路径。</summary>
+    private static void CopyDirectory(string from, string to)
+    {
+        Directory.CreateDirectory(to);
+        foreach (string file in Directory.GetFiles(from))
+        {
+            File.Copy(file, Path.Combine(to, Path.GetFileName(file)));
+        }
+
+        foreach (string dir in Directory.GetDirectories(from))
+        {
+            CopyDirectory(dir, Path.Combine(to, Path.GetFileName(dir)));
+        }
+    }
+
+    /// <summary>配置里指向真实 LocalAppData 老根的路径改写到当前根，保留相对子路径。</summary>
     public static string Retarget(string path)
     {
-        if (!IsPackaged || string.IsNullOrWhiteSpace(path))
+        if (string.IsNullOrWhiteSpace(path))
         {
             return path;
         }
 
-        string prefix = Path.Combine(
+        string oldRoot = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "MintWall") + Path.DirectorySeparatorChar;
-        return path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-            ? Path.Combine(Root, path[prefix.Length..])
-            : path;
+            "MintWall");
+        string prefix = oldRoot + Path.DirectorySeparatorChar;
+        if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return path;
+        }
+
+        // 便携版老根还在（两份并存）时不改写，避免把仍有效的旧路径指空；搬走后才整体改写。
+        if (!IsPackaged && Directory.Exists(oldRoot))
+        {
+            return path;
+        }
+
+        return Path.Combine(Root, path[prefix.Length..]);
     }
 
     public static string Root { get; }

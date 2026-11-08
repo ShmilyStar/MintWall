@@ -712,7 +712,7 @@ public partial class MainViewModel : ObservableObject
         List<string> lines = new()
         {
             $"系统版本：Windows {os.Major}.{os.Minor} build {ReadRegistry(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion", "CurrentBuildNumber") ?? os.Build.ToString()}（{os.Revision}）",
-            $"运行方式：{(IsPackaged ? "MSIX 包内（数据在 Packages 容器）" : "免安装 / 便携（数据在 LocalAppData）")}",
+            $"运行方式：{(IsPackaged ? "MSIX 包内（数据在 Packages 容器）" : "免安装 / 便携（数据在 exe 旁 data 子文件夹）")}",
             $"桌面接口：{EngineText}",
             $"逐显示器：{(SupportsPerMonitor ? "支持（IDesktopWallpaper 已注册）" : "不支持（接口未注册，只能整屏下发）")}",
             $"识别到的屏幕：{MonitorSummary}",

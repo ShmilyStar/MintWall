@@ -103,12 +103,23 @@ if (-not $SkipMsix) {
     Write-Host ("==> 一键安装包：{0}（{1:N1} MB）" -f $installerZip, ((Get-Item $installerZip).Length / 1MB))
 }
 
-Write-Host '==> 生成免安装便携版 zip'
+Write-Host '==> 发布单文件主程序（便携版与单文件资产共用）'
+$singleFile = Join-Path $build 'singlefile'
+if (Test-Path $singleFile) { Remove-Item $singleFile -Recurse -Force }
+& $dotnet publish $project -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o $singleFile --nologo -v q
+if ($LASTEXITCODE -ne 0) { throw "单文件 publish 失败（$LASTEXITCODE）" }
+$exeAsset = Join-Path $dist "MintWall_${Version}_win-x64.exe"
+Copy-Item (Join-Path $singleFile 'MintWall.exe') $exeAsset -Force
+Write-Host ("==> 单文件主程序：{0}（{1:N1} MB）" -f $exeAsset, ((Get-Item $exeAsset).Length / 1MB))
+
+Write-Host '==> 生成免安装便携版 zip（根目录仅主程序，运行后数据进 data 子文件夹）'
 $zip = Join-Path $dist "MintWall_${Version}_portable_x64.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
-# 便携版也带一份卸载脚本：清数据但保留用户自选目录。
-Copy-Item (Join-Path $PSScriptRoot 'Uninstall.cmd'), (Join-Path $PSScriptRoot 'Uninstall.ps1') -Destination $staging -Force
-Compress-Archive -Path (Join-Path $staging '*') -DestinationPath $zip
+$portable = Join-Path $build 'portable'
+if (Test-Path $portable) { Remove-Item $portable -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $portable | Out-Null
+Copy-Item $exeAsset (Join-Path $portable 'MintWall.exe') -Force
+Compress-Archive -Path (Join-Path $portable '*') -DestinationPath $zip
 Write-Host ("==> 便携包：{0}（{1:N1} MB）" -f $zip, ((Get-Item $zip).Length / 1MB))
 
 Write-Host '完成。'

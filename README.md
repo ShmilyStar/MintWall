@@ -54,7 +54,7 @@
 | --- | --- |
 | `MintWall_x.y.z_installer_x64.zip` | 一键安装包，解压后双击 `Install.cmd`（含自签证书） |
 | `MintWall_x.y.z_x64.msix` | 原始安装包，需先信任 `packaging/MintWall.cer` |
-| `MintWall_x.y.z_portable_x64.zip` | 免安装便携版，解压直接运行 `MintWall.exe` |
+| `MintWall_x.y.z_portable_x64.zip` | 免安装便携版，解压后根目录只有 `MintWall.exe`；运行后配置/缓存/库自动放进 exe 旁的 `data` 子文件夹，整目录可拷走 |
 | `MintWall_x.y.z_win-x64.exe` | 单文件版，双击即用 |
 
 > MSIX 使用自签名证书，首次安装需要信任包内证书；`Install.cmd` 会自动完成。
@@ -88,10 +88,10 @@ MintWall.exe uninstall
 | 版本 | 目录 |
 | --- | --- |
 | MSIX | `%LOCALAPPDATA%\Packages\MintWall.Desktop_cjhz37xas16f6\LocalState\MintWall` |
-| 便携 / 单文件 | `%LOCALAPPDATA%\MintWall` |
+| 便携 / 单文件 | exe 同目录的 `data` 子文件夹（旧版留在 `%LOCALAPPDATA%\MintWall` 的数据首次运行自动搬入） |
 
 ```text
-MintWall/
+MintWall/（MSIX）或 data/（便携）
 ├─ settings.json        配置（源、定时、样式、路径）
 ├─ wallpapers/          桌面壁纸库（内置目录，按显示器分）
 ├─ wallpapers-lock/     锁屏壁纸库
@@ -108,11 +108,11 @@ MintWall/
 需要 Windows x64 与 .NET 8 SDK（仓库不依赖 Visual Studio 或系统级 Windows SDK）。
 
 ```powershell
-# 构建并打包 MSIX + 便携 zip（首次会自动下载 makeappx/signtool）
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Version 1.4.1
+# 构建并打包 MSIX + 便携 zip + 单文件 exe（首次会自动下载 makeappx/signtool）
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Version 1.4.4
 
-# 跳过 MSIX，只生成便携版
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Version 1.4.1 -SkipMsix
+# 跳过 MSIX，只生成便携版与单文件 exe
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Version 1.4.4 -SkipMsix
 ```
 
 产物在 `dist/`。自签证书由 `scripts/make-cert.ps1` 生成，证书文件为 `packaging/MintWall.cer`。

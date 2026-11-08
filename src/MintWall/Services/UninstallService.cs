@@ -19,19 +19,18 @@ public static class UninstallService
         {
             Path.Combine(local, "MintWall"),
             Path.Combine(local, "WallpaperStudio"),
+            // 打包版是容器根，便携版是 exe 旁的 data 目录，系统卸载带不走，程序内清理自己删。
+            DataPaths.Root,
         };
-        if (DataPaths.IsPackaged)
-        {
-            // 包容器里的数据系统右键卸载会带走，程序内清理时也得自己删一遍。
-            targets.Add(DataPaths.Root);
-        }
 
         bool ok = true;
 
         foreach (string dir in targets)
         {
             // 迁移失败说明数据还留在真实 LocalAppData，删掉就等于把唯一一份壁纸库清空。
-            if (DataPaths.MigrationIncomplete && dir.StartsWith(local, StringComparison.OrdinalIgnoreCase))
+            if (DataPaths.MigrationIncomplete &&
+                (dir.StartsWith(local, StringComparison.OrdinalIgnoreCase) ||
+                 (!DataPaths.IsPackaged && dir == DataPaths.Root)))
             {
                 Console.WriteLine("保留（迁移未完成，担心误删数据）：" + dir);
                 continue;
