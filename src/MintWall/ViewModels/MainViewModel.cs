@@ -364,6 +364,13 @@ public partial class MainViewModel : ObservableObject
         _persistTimer.Start();
     }
 
+    /// <summary>交给后台进程前立即落盘，不能等防抖定时器。</summary>
+    public void FlushPersistNow()
+    {
+        _persistTimer.Stop();
+        FlushPersist();
+    }
+
     private void FlushPersist()
     {
         if (!_persistDirty)

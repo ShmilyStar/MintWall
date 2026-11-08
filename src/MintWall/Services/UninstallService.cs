@@ -10,6 +10,7 @@ public static class UninstallService
 {
     public static bool Purge()
     {
+        ProcessIpc.StopWorkerAndWait();
         StartupService.Remove();
         RemoveStartShortcuts();
 

@@ -7,9 +7,6 @@ namespace MintWall;
 
 public partial class App : Application
 {
-    private const string MutexName = @"Local\MintWall.Desktop.SingleInstance";
-    private const string ShowEventName = @"Local\MintWall.Desktop.ShowMainWindow";
-
     private Mutex? _mutex;
     private EventWaitHandle? _showEvent;
 
@@ -18,17 +15,9 @@ public partial class App : Application
         base.OnStartup(e);
         DataPaths.EnsureCreated();
 
-        if (e.Args.Length > 0)
-        {
-            // Run on the thread pool: awaiting on the dispatcher thread would deadlock the HTTP continuations.
-            int code = Task.Run(() => CliRunner.RunAsync(e.Args)).GetAwaiter().GetResult();
-            Shutdown(code);
-            return;
-        }
-
         // 事件先于 mutex 创建：第二个进程 Set 时即使监听线程还没起来，信号也会保留到被 WaitOne 取走。
-        _showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
-        _mutex = new Mutex(false, MutexName);
+        _showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ProcessIpc.ShowEventName);
+        _mutex = new Mutex(false, ProcessIpc.SingleInstanceMutexName);
         bool first;
         try
         {

@@ -9,9 +9,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>MintWall</RootNamespace>
     <AssemblyName>MintWall</AssemblyName>
+    <StartupObject>MintWall.Program</StartupObject>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
-    <Version>1.4.2</Version>
+    <Version>1.4.3</Version>
     <Company>MintWall</Company>
     <Product>MintWall</Product>
     <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>

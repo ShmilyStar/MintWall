@@ -54,25 +54,37 @@ public partial class MainWindow : Window
 
     private async Task CloseOrHideAsync()
     {
-        // IsEnabled 内部是 WinRT 同步等待，放在 UI 线程上会和 dispatcher 续延死锁。
-        bool startup;
         try
         {
-            startup = await Task.Run(StartupService.IsEnabled);
+            // IsEnabled 内部是 WinRT 同步等待，放在 UI 线程上会和 dispatcher 续延死锁。
+            bool startup = await Task.Run(StartupService.IsEnabled);
+            WorkerLog.Write($"关闭决策：自启={startup}");
+            if (startup)
+            {
+                // 先落盘配置，再让轻量后台进程接管计时；接管失败就退回隐藏窗口，后台不断档。
+                _viewModel.FlushPersistNow();
+                // 已有后台在跑（例如上一次交接的重复关闭决策）就直接退界面，不再拉第二个进程。
+                bool handoff = ProcessIpc.WorkerIsRunning || await Task.Run(ProcessIpc.TryStartWorker);
+                if (handoff)
+                {
+                    _viewModel.Log("界面已退出，交给轻量后台进程继续定时换图。");
+                    _exiting = true;
+                    Close();
+                    return;
+                }
+
+                _viewModel.Log("后台进程启动失败，窗口转入后台隐藏。");
+                Hide();
+                return;
+            }
+
+            _exiting = true;
+            Close();
         }
         finally
         {
             _decidingClose = false;
         }
-
-        if (startup)
-        {
-            Hide();
-            return;
-        }
-
-        _exiting = true;
-        Close();
     }
 
     private void UpdateMaximizeGlyph()

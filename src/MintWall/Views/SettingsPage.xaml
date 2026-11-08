@@ -109,9 +109,9 @@
                                   Style="{StaticResource ToggleSwitch}"
                                   IsChecked="{Binding StartWithWindows}" />
                         <TextBlock Style="{StaticResource Hint}"
-                                   Text="便携版写入当前用户的启动项；MSIX 版交给系统管理，卸载时一并移除。定时换壁纸需要程序一直运行。" />
+                                   Text="便携版写入当前用户的启动项；MSIX 版交给系统管理，卸载时一并移除。登录自启后不弹窗口，由轻量后台进程定时换图。" />
                         <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0"
-                                   Text="点 × 的行为：开启开机自启时只隐藏窗口，后台静默继续换图，再点程序图标恢复窗口；未开启时点 × 直接退出程序。" />
+                                   Text="点 × 的行为：开启开机自启时退出界面，交给轻量后台进程继续换图（内存占用更低），再点程序图标恢复窗口；未开启时点 × 直接退出程序。" />
                     </StackPanel>
                 </Border>
 
