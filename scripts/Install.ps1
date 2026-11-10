@@ -8,7 +8,9 @@ if (-not $msix) { throw '安装包缺失：请把 .msix 与本脚本放在同一
 Write-Host "==> 安装包：$($msix.Name)"
 
 if (Test-Path $cer) {
-    $trusted = Get-ChildItem Cert:\LocalMachine\TrustedPeople | Where-Object { $_.Subject -match 'MintWall' }
+    # 按指纹判断：证书轮换后主题不变，光看主题会误判新证书已受信任，安装时报 0x80073CFB。
+    $thumbprint = (New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($cer)).Thumbprint
+    $trusted = Get-ChildItem Cert:\LocalMachine\TrustedPeople | Where-Object { $_.Thumbprint -eq $thumbprint }
     if (-not $trusted) {
         Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null
         Write-Host '==> 已把自签证书加入本机受信任人'
