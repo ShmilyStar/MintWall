@@ -111,7 +111,8 @@ public static class StartupService
 
     private static async Task<StartupTask?> FindTaskAsync()
     {
-        IReadOnlyList<StartupTask> tasks = await StartupTask.GetForCurrentPackageAsync().AsTask().ConfigureAwait(true);
+        // 同步包装 FindTask 会阻塞调用线程（可能是 UI 线程）；捕获 dispatcher 上下文会让续延永远排不上队，整个进程卡死。
+        IReadOnlyList<StartupTask> tasks = await StartupTask.GetForCurrentPackageAsync().AsTask().ConfigureAwait(false);
         return tasks.FirstOrDefault(task => string.Equals(task.TaskId, TaskId, StringComparison.Ordinal));
     }
 }

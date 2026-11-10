@@ -56,7 +56,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            // IsEnabled 内部是 WinRT 同步等待，放在 UI 线程上会和 dispatcher 续延死锁。
+            // WinRT 查询丢到线程池，避免冷启动时阻塞 UI 线程。
             bool startup = await Task.Run(StartupService.IsEnabled);
             WorkerLog.Write($"关闭决策：自启={startup}");
             if (startup)
