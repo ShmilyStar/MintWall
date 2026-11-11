@@ -21,11 +21,9 @@
                             Command="{Binding CopySourcesFromDesktopCommand}"
                             Visibility="{Binding IsLock, Converter={StaticResource BoolToVis}}" />
                     <Button Content="添加"
-                            Style="{StaticResource AccentButton}"
                             Margin="0,0,8,0"
                             Command="{Binding AddSourceCommand}" />
                     <Button Content="编辑" Margin="0,0,8,0" Command="{Binding EditSourceCommand}" />
-                    <Button Content="测试" Margin="0,0,8,0" Command="{Binding TestSourceCommand}" />
                     <Button Content="删除"
                             Style="{StaticResource DangerButton}"
                             Margin="0"
@@ -33,7 +31,7 @@
                 </StackPanel>
             </Grid>
 
-            <Grid MinHeight="150">
+            <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="290" />
                     <ColumnDefinition Width="12" />
@@ -44,7 +42,19 @@
 
                 <Border Grid.Column="0" Style="{StaticResource Inset}" Padding="6">
                     <Grid>
-                        <ListBox ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource}">
+                        <ListBox ItemsSource="{Binding Sources}"
+                                 SelectedItem="{Binding SelectedSource}"
+                                 PreviewMouseRightButtonDown="SourcesList_RightClick">
+                            <ListBox.ContextMenu>
+                                <ContextMenu Style="{StaticResource AppContextMenu}">
+                                    <MenuItem Header="编辑"
+                                              Style="{StaticResource AppMenuItem}"
+                                              Click="EditSourceMenu_Click" />
+                                    <MenuItem Header="复制"
+                                              Style="{StaticResource AppMenuItem}"
+                                              Click="CopySourceLink_Click" />
+                                </ContextMenu>
+                            </ListBox.ContextMenu>
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Grid>
@@ -165,50 +175,32 @@
                             <TextBlock Style="{StaticResource Hint}"
                                        Margin="0,6,0,0"
                                        Text="开着：存进下面的“保存位置”，永久保留、不进壁纸库。关着：只放程序缓存，换下一张时旧的那张自动删掉。" />
-                            <Grid Margin="0,10,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="保存位置" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                <Border Grid.Column="1"
-                                        Style="{StaticResource Inset}"
-                                        Cursor="Hand"
-                                        MouseLeftButtonUp="SaveFolder_Click"
-                                        ToolTip="点击选择保存位置">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding SaveDirText, Mode=OneWay}"
-                                                   Style="{StaticResource Mono}"
-                                                   MaxWidth="250"
-                                                   VerticalAlignment="Center"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   TextWrapping="NoWrap" />
-                                        <Border Style="{StaticResource ChipAccent}"
-                                                Margin="8,0,0,0"
-                                                VerticalAlignment="Center"
-                                                Visibility="{Binding IsBuiltInSave, Converter={StaticResource BoolToVis}}">
-                                            <TextBlock Text="内置" FontSize="11" TextWrapping="NoWrap" />
-                                        </Border>
-                                    </StackPanel>
-                                </Border>
-                                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Center">
-                                    <Button Content="选择目录"
-                                            Margin="0,0,8,0"
-                                            Command="{Binding ChooseSaveFolderCommand}" />
-                                    <Button Content="恢复内置"
-                                            Margin="0,0,8,0"
-                                            Visibility="{Binding IsBuiltInSave, Converter={StaticResource InverseBoolToVis}}"
-                                            Command="{Binding ResetSaveFolderCommand}" />
-                                    <Button Content="打开"
-                                            Margin="0"
-                                            Command="{Binding OpenSaveFolderCommand}" />
-                                </StackPanel>
-                            </Grid>
+                            <TextBlock Text="保存位置" Style="{StaticResource FieldLabel}" Margin="0,10,0,6" />
+                            <Border Style="{StaticResource Inset}"
+                                    Cursor="Hand"
+                                    MouseLeftButtonUp="SaveFolder_Click"
+                                    ToolTip="点击选择保存位置">
+                                <TextBlock Text="{Binding SaveDirText, Mode=OneWay}"
+                                           Style="{StaticResource Mono}"
+                                           TextWrapping="NoWrap"
+                                           TextTrimming="CharacterEllipsis" />
+                            </Border>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Button Content="选择目录"
+                                        Margin="0,0,8,0"
+                                        Command="{Binding ChooseSaveFolderCommand}" />
+                                <Button Content="恢复内置"
+                                        Margin="0,0,8,0"
+                                        Visibility="{Binding IsBuiltInSave, Converter={StaticResource InverseBoolToVis}}"
+                                        Command="{Binding ResetSaveFolderCommand}" />
+                                <Button Content="打开"
+                                        Margin="0"
+                                        Command="{Binding OpenSaveFolderCommand}" />
+                            </StackPanel>
                         </StackPanel>
                         <TextBlock Style="{StaticResource Hint}"
                                    Margin="0,8,0,0"
-                                   Text="改完建议先点“测试”，确认能取到图片再换壁纸，避免把画面换成一张错误页。" />
+                                   Text="改完建议先点“刷新”，确认能取到图片再点“设置当前”，避免把画面换成一张错误页。" />
                     </StackPanel>
 
                     <TextBlock Style="{StaticResource Hint}"
@@ -228,18 +220,33 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
-                                <TextBlock Text="源预览" Style="{StaticResource FieldLabel}" />
-                                <TextBlock Text="{Binding SourcePreviewDetail}"
+                            <Grid VerticalAlignment="Stretch"
+                                  Margin="0,0,8,0"
+                                  Visibility="{Binding HasSourcePreview, Converter={StaticResource BoolToVis}}">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0"
+                                           Text="{Binding SourcePreviewResolution}"
                                            Style="{StaticResource Mono}"
                                            FontSize="11"
-                                           TextWrapping="Wrap"
-                                           Visibility="{Binding SourcePreviewDetail, Converter={StaticResource TextPresentToVis}}" />
+                                           VerticalAlignment="Top" />
+                                <TextBlock Grid.Row="1"
+                                           Text="{Binding SourcePreviewSize}"
+                                           Style="{StaticResource Mono}"
+                                           FontSize="11"
+                                           VerticalAlignment="Bottom" />
+                            </Grid>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="刷新"
+                                        Margin="0,0,8,0"
+                                        Command="{Binding RefreshSourcePreviewCommand}" />
+                                <Button Content="设置当前"
+                                        Style="{StaticResource AccentButton}"
+                                        Margin="0"
+                                        Command="{Binding ApplySourcePreviewCommand}" />
                             </StackPanel>
-                            <Button Grid.Column="1"
-                                    Content="刷新预览"
-                                    Margin="0"
-                                    Command="{Binding RefreshSourcePreviewCommand}" />
                         </Grid>
 
                         <Border Background="{StaticResource BrushCard}"

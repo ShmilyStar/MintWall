@@ -32,6 +32,8 @@ public static class DataPaths
         CacheDir = Path.Combine(Root, "cache");
         SaveDir = Path.Combine(Root, "saved");
         ThumbDir = Path.Combine(Root, "thumbs");
+        VideoDir = Path.Combine(Root, "videos");
+        VideoCacheDir = Path.Combine(Root, "videos-cache");
         SettingsFile = Path.Combine(Root, "settings.json");
         CreateDirectories();
     }
@@ -175,6 +177,28 @@ public static class DataPaths
 
     /// <summary>没开自动保存时，接口抓下来的图先落这里；换下一张就清掉。</summary>
     public static string CacheDir { get; }
+
+    /// <summary>本地视频库：导入的视频复制到这里。</summary>
+    public static string VideoDir { get; }
+
+    /// <summary>这块屏自己的视频库子目录（与图片库一样按屏分开）。</summary>
+    public static string VideoDirFor(string monitorId)
+    {
+        string dir = Path.Combine(VideoDir, DirKey(monitorId));
+        EnsureDirectory(dir);
+        return dir;
+    }
+
+    /// <summary>在线视频源自动保存的内置归档目录（不进本地视频库，与图片的“保存位置”一致）。</summary>
+    public static string VideoSaveDirFor(string monitorId)
+    {
+        string dir = Path.Combine(Root, "videos-saved", DirKey(monitorId));
+        EnsureDirectory(dir);
+        return dir;
+    }
+
+    /// <summary>在线视频源的下载缓存。</summary>
+    public static string VideoCacheDir { get; }
 
     /// <summary>开了自动保存但用户没指定保存位置时，图归档到这里；这里的图不进壁纸库，也不参与清理。</summary>
     public static string SaveDir { get; }
@@ -337,6 +361,8 @@ public static class DataPaths
         Directory.CreateDirectory(CacheDir);
         Directory.CreateDirectory(SaveDir);
         Directory.CreateDirectory(ThumbDir);
+        Directory.CreateDirectory(VideoDir);
+        Directory.CreateDirectory(VideoCacheDir);
     }
 
     /// <summary>内置目录名：整屏统一目标用 desktop / lock，具体某块屏用它的稳定哈希名。</summary>

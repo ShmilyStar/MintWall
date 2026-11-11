@@ -22,7 +22,7 @@
                     Command="{Binding Lock.FetchSelectedCommand}" />
         </Grid>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
+        <ScrollViewer Grid.Row="1" Style="{StaticResource StableScrollViewer}" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
             <StackPanel>
 
                 <sections:MonitorTabBar DataContext="{Binding Lock}" />

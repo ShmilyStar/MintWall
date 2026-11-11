@@ -31,8 +31,17 @@
 
 ### 壁纸库
 - 桌面库、锁屏库按显示器分开存放，也可以直接指向自己的相册目录（含子文件夹）。
-- 收藏、按文件名筛选、只看收藏、缩略图、导入本地图片。
+- 收藏、按文件名筛选、只看收藏、缩略图、导入本地图片（支持 jpg/png/bmp/gif/webp，webp 会按入库格式自动转码）。
 - 库上限可调，超出后自动清理最早的（收藏不删）。
+
+### 视频壁纸
+- 左侧栏独立入口：**本地视频库**、**在线视频库**，都按显示器分 tab，与桌面壁纸库/壁纸源同款版式。
+- 本地视频库：可「选择目录」指定自己的视频文件夹（含子文件夹），也可导入 mp4/wmv/avi/mov/m4v 到内置目录；自动抓首帧生成缩略图，支持收藏、只看收藏、搜索、刷新、打开目录。
+- 在线视频库：添加直链视频或返回视频地址的 JSON 接口源，支持请求头/JSON 字段路径、单源启用、自动保存与保存位置（默认按源名分文件夹）、刷新预览（预览框内播放，不动桌面）、设置当前。
+- 概览页壁纸来源新增「视频」：只有视频库有可用内容时才能选中；启用后「换一张」从该屏的视频库取片播放。
+- 两个库各自有启用开关：**两个都关闭**时停止视频并为该屏恢复图片壁纸。
+- 视频垫在桌面图标层后面循环静音播放；换静态壁纸会自动停止视频。
+- 源列表右键可「编辑 / 复制」，预览信息显示分辨率与文件大小。
 
 ### 定时
 - 桌面按固定间隔换图。
@@ -92,11 +101,13 @@ MintWall.exe uninstall
 
 ```text
 MintWall/（MSIX）或 data/（便携）
-├─ settings.json        配置（源、定时、样式、路径）
+├─ settings.json        配置（源、定时、样式、路径、视频库）
 ├─ wallpapers/          桌面壁纸库（内置目录，按显示器分）
 ├─ wallpapers-lock/     锁屏壁纸库
-├─ cache/               抓取缓存
-├─ thumbs/              缩略图
+├─ videos/              本地视频库（按显示器分）
+├─ videos-saved/        在线视频自动保存归档（按显示器、按源名分）
+├─ cache/               抓取缓存（在线视频预览走 videos-cache）
+├─ thumbs/              缩略图（含视频首帧）
 ├─ saved/               源自动保存归档
 └─ worker.log           后台进程日志（滚动，不超过 512KB）
 ```
@@ -109,10 +120,10 @@ MintWall/（MSIX）或 data/（便携）
 
 ```powershell
 # 构建并打包 MSIX + 便携 zip + 单文件 exe（首次会自动下载 makeappx/signtool）
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Version 1.4.4
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Version 1.6.8
 
 # 跳过 MSIX，只生成便携版与单文件 exe
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Version 1.4.4 -SkipMsix
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Version 1.6.8 -SkipMsix
 ```
 
 产物在 `dist/`。自签证书由 `scripts/make-cert.ps1` 生成，证书文件为 `packaging/MintWall.cer`。

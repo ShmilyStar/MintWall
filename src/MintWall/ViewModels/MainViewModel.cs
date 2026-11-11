@@ -407,6 +407,8 @@ public partial class MainViewModel : ObservableObject
                     "locklib" => $"{lockScreen.TotalLibraryCount} 张",
                     "desktopsrc" => $"{desktop.TotalSourceCount} 个",
                     "locksrc" => $"{lockScreen.TotalSourceCount} 个",
+                    "videolib" => $"{desktop.TotalVideoCount} 个",
+                    "videosrc" => $"{desktop.TotalVideoSourceCount} 个",
                     _ => string.Empty,
                 };
             }
@@ -862,6 +864,9 @@ public partial class MainViewModel : ObservableObject
         new NavGroup { Label = "壁纸源" },
         new NavLink { Key = "desktopsrc", Label = "桌面壁纸源" },
         new NavLink { Key = "locksrc", Label = "锁屏壁纸源" },
+        new NavGroup { Label = "视频壁纸" },
+        new NavLink { Key = "videolib", Label = "本地视频库" },
+        new NavLink { Key = "videosrc", Label = "在线视频库" },
         new NavGroup { Label = "系统" },
         new NavLink { Key = "settings", Label = "设置" },
         new NavLink { Key = "diagnostics", Label = "诊断" },

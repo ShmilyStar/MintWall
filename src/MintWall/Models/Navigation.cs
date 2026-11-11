@@ -36,6 +36,8 @@ internal static class NavGlyphs
         ["locklib"] = 0xE91B,
         ["desktopsrc"] = 0xE774,
         ["locksrc"] = 0xE753,
+        ["videolib"] = 0xE714,
+        ["videosrc"] = 0xE968,
         ["settings"] = 0xE713,
         ["diagnostics"] = 0xE9D9,
     };

@@ -120,6 +120,8 @@
             <views:LockLibraryPage Visibility="{Binding CurrentPage, Converter={StaticResource PageVis}, ConverterParameter=locklib}" />
             <views:DesktopSourcesPage Visibility="{Binding CurrentPage, Converter={StaticResource PageVis}, ConverterParameter=desktopsrc}" />
             <views:LockSourcesPage Visibility="{Binding CurrentPage, Converter={StaticResource PageVis}, ConverterParameter=locksrc}" />
+            <views:VideoLibraryPage Visibility="{Binding CurrentPage, Converter={StaticResource PageVis}, ConverterParameter=videolib}" />
+            <views:VideoSourcesPage Visibility="{Binding CurrentPage, Converter={StaticResource PageVis}, ConverterParameter=videosrc}" />
             <views:SettingsPage Visibility="{Binding CurrentPage, Converter={StaticResource PageVis}, ConverterParameter=settings}" />
             <views:DiagnosticsPage Visibility="{Binding CurrentPage, Converter={StaticResource PageVis}, ConverterParameter=diagnostics}" />
         </Grid>

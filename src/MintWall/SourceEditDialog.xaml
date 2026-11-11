@@ -5,7 +5,8 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="壁纸源设置"
         Background="{StaticResource BrushWindow}"
-        Height="520" Width="560"
+        Width="560"
+        SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         WindowStyle="None"
@@ -103,14 +104,6 @@
                              VerticalContentAlignment="Top"
                              FontFamily="Cascadia Mono, Consolas"
                              FontSize="12" />
-                </StackPanel>
-
-                <StackPanel Grid.Row="5" Margin="0,4,0,0">
-                    <CheckBox Content="自动保存：抓到的图存进这块屏的“保存位置”目录"
-                              IsChecked="{Binding AutoSave}"
-                              Margin="0,0,0,8" />
-                    <TextBlock Text="保存位置在壁纸源面板里点“选择目录”指定；没选则用程序内置的归档目录，不会进壁纸库列表。关掉自动保存则只放程序缓存，换下一张时旧图自动删除。解析方式选“必应每日壁纸”会自动取当天的必应图；“Windows 聚焦”则不联网，直接用系统本机的聚焦图。"
-                               Foreground="{StaticResource BrushTextDim}" FontSize="11.5" TextWrapping="Wrap" />
                 </StackPanel>
 
                 <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">

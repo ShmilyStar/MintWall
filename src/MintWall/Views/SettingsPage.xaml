@@ -10,7 +10,7 @@
         </Style>
     </UserControl.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,20,24,16">
+    <ScrollViewer Style="{StaticResource StableScrollViewer}" VerticalScrollBarVisibility="Auto" Padding="24,20,24,16">
         <StackPanel>
             <StackPanel Margin="0,0,0,14">
                 <TextBlock Text="设置" Style="{StaticResource PageTitle}" />

@@ -50,6 +50,10 @@ public partial class TargetWorkspace : ObservableObject
 
     public int TotalLibraryCount => Monitors.Sum(m => m.LibraryCount);
 
+    public int TotalVideoCount => Monitors.Sum(m => m.Video.LocalCount);
+
+    public int TotalVideoSourceCount => Monitors.Sum(m => m.Video.EnabledSourceCount);
+
     public string RootDir => DataPaths.WallpaperDirFor(IsLock);
 
     /// <summary>顶栏 tab 下方那句“能不能真的逐屏下发”的说明。</summary>
@@ -139,6 +143,8 @@ public partial class TargetWorkspace : ObservableObject
         OnPropertyChanged(nameof(MonitorCount));
         OnPropertyChanged(nameof(TotalSourceCount));
         OnPropertyChanged(nameof(TotalLibraryCount));
+        OnPropertyChanged(nameof(TotalVideoCount));
+        OnPropertyChanged(nameof(TotalVideoSourceCount));
     }
 
     /// <summary>

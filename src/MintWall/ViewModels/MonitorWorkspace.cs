@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -25,9 +26,9 @@ public partial class MonitorWorkspace : ObservableObject
     private bool _sessionLocked;
     private CancellationTokenSource? _thumbCts;
     private CancellationTokenSource? _sourcePreviewCts;
+    private string? _sourcePreviewPath;
     private CancellationTokenSource? _previewCts;
     private readonly List<LibraryItem> _allItems = new();
-    private bool _sourcePreviewAttempted;
     private bool _committingSource;
 
     public MonitorWorkspace(MainViewModel host, bool isLock, MonitorSettings data)
@@ -36,6 +37,7 @@ public partial class MonitorWorkspace : ObservableObject
         IsLock = isLock;
         Data = data;
         _library = new LibraryService(DataPaths.ResolveLibraryDir(isLock, data));
+        Video = new VideoSectionWorkspace(host, this, data.Video);
 
         Sources.CollectionChanged += Sources_CollectionChanged;
         foreach (SourceProfile source in Data.Sources)
@@ -52,6 +54,7 @@ public partial class MonitorWorkspace : ObservableObject
         _fetchFromSources = Data.FetchFromSources;
         _fetchFromLibrary = Data.FetchFromLibrary;
         _fetchFromBuiltIn = Data.FetchFromBuiltIn;
+        _fetchFromVideo = Data.FetchFromVideo;
 
         _timer.Tick += async (_, _) =>
         {
@@ -77,14 +80,15 @@ public partial class MonitorWorkspace : ObservableObject
 
     public string TargetTitle => IsLock ? "锁屏" : "桌面";
 
-    /// <summary>锁屏界面不展示“下一次执行时间”，只有桌面目标显示。</summary>
-    public bool ShowNextRun => !IsLock;
-
+    /// <summary>锁屏定时只在会话锁定后开始计时，解锁即暂停，下次锁定重新计时。</summary>
     public string ScheduleHint => IsLock
-        ? "锁屏定时只在会话锁定后开始计时，解锁即暂停，下次锁定重新计时。"
+        ? "只在屏幕锁定后开始计时，解锁后计时停止。"
         : "每个目标各有独立定时器，只在程序运行时生效。";
 
     public MonitorSettings Data { get; }
+
+    /// <summary>这块屏的视频壁纸库（本地视频 + 在线源）。</summary>
+    public VideoSectionWorkspace Video { get; }
 
     public string MonitorId => Data.MonitorId;
 
@@ -174,6 +178,10 @@ public partial class MonitorWorkspace : ObservableObject
     [ObservableProperty]
     private bool _fetchFromBuiltIn;
 
+    /// <summary>仅桌面：从视频壁纸库取片播放；锁屏没有视频壁纸。</summary>
+    [ObservableProperty]
+    private bool _fetchFromVideo;
+
     [ObservableProperty]
     private string _nextRunText = "未启用";
 
@@ -192,10 +200,13 @@ public partial class MonitorWorkspace : ObservableObject
     private ImageSource? _sourcePreview;
 
     [ObservableProperty]
-    private string _sourcePreviewStatus = "选一个源查看预览";
+    private string _sourcePreviewStatus = "点“刷新”取一张预览";
 
     [ObservableProperty]
-    private string _sourcePreviewDetail = string.Empty;
+    private string _sourcePreviewResolution = string.Empty;
+
+    [ObservableProperty]
+    private string _sourcePreviewSize = string.Empty;
 
     public bool HasSelectedSource => SelectedSource is not null;
 
@@ -223,8 +234,8 @@ public partial class MonitorWorkspace : ObservableObject
     {
         OpenFileDialog dialog = new()
         {
-            Title = IsLock ? $"选择{Label}的锁屏图片（仅支持 JPG / PNG）" : $"选择要导入{Label}壁纸库的图片",
-            Filter = IsLock ? "图片|*.jpg;*.jpeg;*.png|所有文件|*.*" : "图片|*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.webp|所有文件|*.*",
+            Title = IsLock ? $"选择{Label}的锁屏图片" : $"选择要导入{Label}壁纸库的图片",
+            Filter = "图片|*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.webp|所有文件|*.*",
         };
 
         if (dialog.ShowDialog() != true)
@@ -235,7 +246,9 @@ public partial class MonitorWorkspace : ObservableObject
         await _host.RunAsync($"正在导入 {Path.GetFileName(dialog.FileName)}…", async token =>
         {
             AcquiredImage acquired = await Task.Run(() => _library.ImportLocal(dialog.FileName, _host.Encode), token);
-            await ApplyPathAsync(acquired.FilePath, "已导入并应用", token);
+            RefreshLibrary();
+            _host.StatusText = $"已导入：{Path.GetFileName(acquired.FilePath)}（{Label} 的{(IsLock ? "锁屏" : "桌面")}库）";
+            _host.Log(_host.StatusText);
         });
     }
 
@@ -260,7 +273,8 @@ public partial class MonitorWorkspace : ObservableObject
             else
             {
                 SourcePreview = null;
-                SourcePreviewDetail = string.Empty;
+                SourcePreviewResolution = string.Empty;
+                SourcePreviewSize = string.Empty;
                 SourcePreviewStatus = "测试没取到可预览的图片，原因见“诊断”页";
                 _host.StatusText = $"「{source.Name}」测试完成，但没取到图片，详见“诊断”页。";
             }
@@ -269,54 +283,60 @@ public partial class MonitorWorkspace : ObservableObject
         });
     }
 
-    /// <summary>打开壁纸源页面时补一张预览，启动阶段不提前占用网络。</summary>
-    public void EnsureSourcePreview()
+    /// <summary>把预览框里这张图设为当前壁纸（桌面）或锁屏。</summary>
+    [RelayCommand]
+    private async Task ApplySourcePreviewAsync()
     {
-        if (!_sourcePreviewAttempted && SelectedSource is { } source)
+        string? path = _sourcePreviewPath;
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
-            _ = LoadSourcePreviewAsync(source, quiet: true);
+            _host.StatusText = "预览框里还没有可用的图片，先点“刷新”。";
+            return;
         }
+
+        await _host.RunAsync(IsLock ? "正在设为锁屏…" : "正在设为壁纸…", async token =>
+            await ApplyPathAsync(path, IsLock ? "已设为当前锁屏" : "已设为当前壁纸", token));
     }
 
     [RelayCommand]
     private Task RefreshSourcePreviewAsync() =>
-        SelectedSource is { } source ? LoadSourcePreviewAsync(source, quiet: false) : Task.CompletedTask;
+        SelectedSource is { } source ? LoadSourcePreviewAsync(source) : Task.CompletedTask;
 
     /// <summary>取一张该源的样片放进右边的预览框；样片只留在缓存，不写入壁纸库。</summary>
-    private async Task LoadSourcePreviewAsync(SourceProfile source, bool quiet)
+    private async Task LoadSourcePreviewAsync(SourceProfile source)
     {
-        _sourcePreviewAttempted = true;
         _sourcePreviewCts?.Cancel();
         CancellationTokenSource cts = new();
         _sourcePreviewCts = cts;
 
-        if (quiet && !source.Enabled)
+        SourcePreview = null;
+        SourcePreviewResolution = string.Empty;
+        SourcePreviewSize = string.Empty;
+        SourcePreviewStatus = $"正在从「{source.Name}」取一张预览…";
+        if (_sourcePreviewPath is { } previousPreview)
         {
-            SourcePreview = null;
-            SourcePreviewDetail = string.Empty;
-            SourcePreviewStatus = "该源已停用，点“刷新预览”仍可临时取一张看看";
-            return;
+            TryDelete(previousPreview);
         }
 
-        SourcePreview = null;
-        SourcePreviewDetail = string.Empty;
-        SourcePreviewStatus = $"正在从「{source.Name}」取一张预览…";
+        _sourcePreviewPath = null;
 
         try
         {
             string dir = Path.Combine(DataPaths.CacheDirFor(IsLock), "preview");
             AcquiredImage acquired = await ImageService.AcquireAsync(source, dir, EncodePreference.Jpeg, cts.Token);
             ImageSource? image = await Task.Run(() => ThumbnailStore.TryLoad(acquired.FilePath, 900), cts.Token);
-            TryDelete(acquired.FilePath);
 
             if (cts.IsCancellationRequested || !ReferenceEquals(SelectedSource, source))
             {
+                TryDelete(acquired.FilePath);
                 return;
             }
 
+            _sourcePreviewPath = acquired.FilePath;
             SourcePreview = image;
             SourcePreviewStatus = image is null ? "取到了图片，但预览解码失败" : string.Empty;
-            SourcePreviewDetail = $"{acquired.Width} × {acquired.Height} · {ImageService.FormatSize(acquired.Bytes)}";
+            SourcePreviewResolution = $"{acquired.Width} × {acquired.Height}";
+            SourcePreviewSize = ImageService.FormatSize(acquired.Bytes);
         }
         catch (OperationCanceledException)
         {
@@ -351,7 +371,8 @@ public partial class MonitorWorkspace : ObservableObject
 
             SourcePreview = image;
             SourcePreviewStatus = image is null ? "取到了图片，但预览解码失败" : string.Empty;
-            SourcePreviewDetail = $"{width} × {height} · {ImageService.FormatSize(body.Length)}";
+            SourcePreviewResolution = $"{width} × {height}";
+            SourcePreviewSize = ImageService.FormatSize(body.Length);
         }
         finally
         {
@@ -621,13 +642,33 @@ public partial class MonitorWorkspace : ObservableObject
         _host.RunAsync($"正在导入 {Path.GetFileName(path)}…", async token =>
         {
             AcquiredImage acquired = await Task.Run(() => _library.ImportLocal(path, _host.Encode), token);
-            await ApplyPathAsync(acquired.FilePath, "已导入并应用", token);
+            RefreshLibrary();
+            _host.StatusText = $"已导入：{Path.GetFileName(acquired.FilePath)}（{Label} 的{(IsLock ? "锁屏" : "桌面")}库）";
+            _host.Log(_host.StatusText);
         });
 
-    /// <summary>抓一张图：在勾选的内置 / 壁纸库 / 壁纸源里随机挑一路，抓到的图按源的自动保存设置落盘。</summary>
+    /// <summary>抓一张图：在勾选的内置 / 壁纸库 / 壁纸源 / 视频里随机挑一路，抓到的图按源的自动保存设置落盘。</summary>
     public async Task FetchAsync(bool auto)
     {
         FetchChannel channel = ResolveChannel();
+
+        if (channel == FetchChannel.Video)
+        {
+            bool played = false;
+            await _host.RunAsync($"正在为{Title}播放视频壁纸…", async token =>
+            {
+                played = await Video.PlayRandomAsync(token);
+            });
+
+            if (played)
+            {
+                _host.StatusText = $"{Title}已切换为视频壁纸：{Video.CurrentVideoText}";
+                return;
+            }
+
+            // 视频库刚好被清空/停用：退回内置图。
+            channel = FetchChannel.BuiltIn;
+        }
 
         if (channel == FetchChannel.Library)
         {
@@ -745,10 +786,6 @@ public partial class MonitorWorkspace : ObservableObject
 
         SyncTimer();
         SelectedSource = Sources.FirstOrDefault(s => s.Id == edited.Id);
-        if (SelectedSource is { } saved)
-        {
-            _ = LoadSourcePreviewAsync(saved, quiet: true);
-        }
         _host.StatusText = $"已{(isNew ? "添加" : "更新")}{Title}的壁纸源“{edited.Name}”，建议先到“诊断”测一次。";
         _host.Log($"{(isNew ? "新增" : "更新")}{Title}壁纸源“{edited.Name}”。");
         RaiseCounts();
@@ -955,13 +992,14 @@ public partial class MonitorWorkspace : ObservableObject
         BuiltIn,
         Library,
         Sources,
+        Video,
     }
 
     /// <summary>勾选的来源里随机挑一个能用的；每次都随机，不按顺序。</summary>
     private FetchChannel ResolveChannel()
     {
         bool hasEnabledSources = EnabledSourceCount > 0;
-        List<FetchChannel> enabled = new(3);
+        List<FetchChannel> enabled = new(4);
         if (FetchFromBuiltIn)
         {
             enabled.Add(FetchChannel.BuiltIn);
@@ -975,6 +1013,11 @@ public partial class MonitorWorkspace : ObservableObject
         if (FetchFromSources && hasEnabledSources)
         {
             enabled.Add(FetchChannel.Sources);
+        }
+
+        if (!IsLock && FetchFromVideo && Video.HasContent)
+        {
+            enabled.Add(FetchChannel.Video);
         }
 
         if (enabled.Count == 0)
@@ -1067,11 +1110,6 @@ public partial class MonitorWorkspace : ObservableObject
         Save();
         _host.StatusText = $"{Title}的源“{source.Name}”已{(source.Enabled ? "启用" : "停用")}。";
         _host.Log(_host.StatusText);
-
-        if (ReferenceEquals(source, SelectedSource))
-        {
-            _ = LoadSourcePreviewAsync(source, quiet: true);
-        }
     }
 
     private void SyncTimer()
@@ -1110,15 +1148,20 @@ public partial class MonitorWorkspace : ObservableObject
             Data.ActiveSourceId = value.Id;
             RaiseCounts();
             Save();
-            _ = LoadSourcePreviewAsync(value, quiet: true);
         }
-        else
+
+        // 预览默认不显示：换源就清掉，等用户点“刷新”再取。
+        _sourcePreviewCts?.Cancel();
+        if (_sourcePreviewPath is { } stalePreview)
         {
-            _sourcePreviewCts?.Cancel();
-            SourcePreview = null;
-            SourcePreviewDetail = string.Empty;
-            SourcePreviewStatus = "选一个源查看预览";
+            TryDelete(stalePreview);
+            _sourcePreviewPath = null;
         }
+
+        SourcePreview = null;
+        SourcePreviewResolution = string.Empty;
+        SourcePreviewSize = string.Empty;
+        SourcePreviewStatus = value is null ? "选一个源查看预览" : "点“刷新”取一张预览";
     }
 
     partial void OnStyleChanged(WallpaperStyleMode value)
@@ -1141,9 +1184,35 @@ public partial class MonitorWorkspace : ObservableObject
 
     partial void OnFetchFromBuiltInChanged(bool value) => ApplyFetchChannels(nameof(FetchFromBuiltIn));
 
+    /// <summary>视频必须真的有片可选：库为空时不选中，弹框提示去视频库添加。</summary>
+    partial void OnFetchFromVideoChanged(bool value)
+    {
+        if (value && !IsLock && !Video.HasContent)
+        {
+            _syncingChannels = true;
+            FetchFromVideo = false;
+            _syncingChannels = false;
+
+            bool goVideoLibrary = AppDialog.Show(
+                "视频壁纸",
+                "请在视频库中导入本地视频或添加在线视频",
+                "去视频库",
+                "知道了");
+
+            if (goVideoLibrary)
+            {
+                _host.ActivatePageCommand.Execute("videolib");
+            }
+
+            return;
+        }
+
+        ApplyFetchChannels(nameof(FetchFromVideo));
+    }
+
     private bool _syncingChannels;
 
-    /// <summary>三个换图来源可以多选；全关时把刚关掉的那个拨回去，保证始终有一路可用。</summary>
+    /// <summary>换图来源可以多选；全关时把刚关掉的那个拨回去，保证始终有一路可用。</summary>
     private void ApplyFetchChannels(string changed)
     {
         if (_syncingChannels)
@@ -1153,7 +1222,7 @@ public partial class MonitorWorkspace : ObservableObject
 
         bool bounced = false;
 
-        if (!FetchFromSources && !FetchFromLibrary && !FetchFromBuiltIn)
+        if (!FetchFromSources && !FetchFromLibrary && !FetchFromBuiltIn && !FetchFromVideo)
         {
             bounced = true;
             _syncingChannels = true;
@@ -1165,6 +1234,9 @@ public partial class MonitorWorkspace : ObservableObject
                 case nameof(FetchFromLibrary):
                     FetchFromLibrary = true;
                     break;
+                case nameof(FetchFromVideo) when !IsLock && Video.HasContent:
+                    FetchFromVideo = true;
+                    break;
                 default:
                     FetchFromBuiltIn = true;
                     break;
@@ -1175,10 +1247,11 @@ public partial class MonitorWorkspace : ObservableObject
         Data.FetchFromSources = FetchFromSources;
         Data.FetchFromLibrary = FetchFromLibrary;
         Data.FetchFromBuiltIn = FetchFromBuiltIn;
+        Data.FetchFromVideo = FetchFromVideo;
         Save();
         SyncTimer();
 
-        List<string> names = new(3);
+        List<string> names = new(4);
         if (FetchFromBuiltIn)
         {
             names.Add("内置");
@@ -1192,6 +1265,11 @@ public partial class MonitorWorkspace : ObservableObject
         if (FetchFromSources)
         {
             names.Add("壁纸源");
+        }
+
+        if (FetchFromVideo)
+        {
+            names.Add("视频");
         }
 
         _host.StatusText = bounced

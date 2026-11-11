@@ -81,19 +81,6 @@ public static class ImageService
     {
         List<string> trace = new();
 
-        if (source.Kind == SourceKind.Spotlight)
-        {
-            string? local = SpotlightService.LocateCurrent();
-            if (local is null)
-            {
-                throw new InvalidOperationException("这台机器上没找到 Windows 聚焦的本地图，先添加一个网络壁纸源。");
-            }
-
-            byte[] spotlightBody = await File.ReadAllBytesAsync(local, ct).ConfigureAwait(false);
-            trace.Add($"本机聚焦 {Path.GetFileName(local)} {FormatSize(spotlightBody.LongLength)}");
-            return SaveToLibrary(spotlightBody, SpotlightService.SourceUrl, targetDir, encode, trace);
-        }
-
         if (source.Kind == SourceKind.Bing)
         {
             FetchResult archive = await FetchAsync(BingService.ArchiveUrl, null, ct, trace).ConfigureAwait(false);

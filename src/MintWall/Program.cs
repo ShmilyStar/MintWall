@@ -19,6 +19,18 @@ public static class Program
                 return WorkerRunner.Run(ready?["--ready=".Length..]);
             }
 
+            if (string.Equals(args[0], "--video-wallpaper", StringComparison.OrdinalIgnoreCase))
+            {
+                return VideoWallpaperHost.Run(args.Length > 1 ? args[1] : null);
+            }
+
+            if (string.Equals(args[0], "--video-thumb", StringComparison.OrdinalIgnoreCase))
+            {
+                return VideoThumbnailService.Capture(
+                    args.Length > 1 ? args[1] : null,
+                    args.Length > 2 ? args[2] : null);
+            }
+
             // 放线程池跑：避免任何同步上下文捕获导致 HTTP/WinRT 续延死锁。
             return Task.Run(() => CliRunner.RunAsync(args)).GetAwaiter().GetResult();
         }

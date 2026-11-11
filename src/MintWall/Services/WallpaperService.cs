@@ -148,6 +148,10 @@ public sealed class WallpaperService
             throw new FileNotFoundException("壁纸文件不存在", filePath);
         }
 
+        // 视频宿主盖在壁纸上方，静态换图前先收掉，否则看起来像"换了没反应"；
+        // 停止要等退出/强杀，放到后台做，避免界面卡住。
+        VideoWallpaperService.StopInBackground();
+
         WriteStyle(style);
 
         try
@@ -319,14 +323,18 @@ public sealed class WallpaperService
 
     private static void BroadcastDesktopChange()
     {
-        try
+        // 广播最多等 1 秒，放后台发，避免点“换一张”后界面停顿。
+        _ = Task.Run(() =>
         {
-            _ = SendMessageTimeout(HWND_BROADCAST, WM_SETTINGCHANGE, IntPtr.Zero, "Desktop", SMTO_ABORTIFHUNG, 1000, out _);
-        }
-        catch
-        {
-            // Broadcast is best-effort.
-        }
+            try
+            {
+                _ = SendMessageTimeout(HWND_BROADCAST, WM_SETTINGCHANGE, IntPtr.Zero, "Desktop", SMTO_ABORTIFHUNG, 1000, out _);
+            }
+            catch
+            {
+                // Broadcast is best-effort.
+            }
+        });
     }
 
     [DllImport("user32.dll", CharSet = CharSet.Auto)]

@@ -86,6 +86,12 @@ public sealed class MonitorSettings
 
     public bool FetchFromBuiltIn { get; set; }
 
+    /// <summary>仅桌面用：从视频壁纸库播放视频；锁屏不支持视频。</summary>
+    public bool FetchFromVideo { get; set; }
+
+    /// <summary>这块屏的视频壁纸库：本地视频、在线源与启用开关。</summary>
+    public VideoLibrarySettings Video { get; set; } = new();
+
     /// <summary>仅桌面用；锁屏由系统自行裁切。</summary>
     public WallpaperStyleMode Style { get; set; } = WallpaperStyleMode.Fill;
 

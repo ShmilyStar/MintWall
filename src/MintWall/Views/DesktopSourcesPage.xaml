@@ -6,6 +6,7 @@
     <Grid Margin="24,20,24,0">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -16,11 +17,8 @@
             </StackPanel>
         </Grid>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
-            <StackPanel>
-                <sections:MonitorTabBar DataContext="{Binding Desktop}" />
-                <sections:SourcesSection DataContext="{Binding Desktop.Selected}" Margin="0,0,0,14" />
-            </StackPanel>
-        </ScrollViewer>
+        <sections:MonitorTabBar Grid.Row="1" DataContext="{Binding Desktop}" />
+
+        <sections:SourcesSection Grid.Row="2" DataContext="{Binding Desktop.Selected}" Margin="0,0,0,14" />
     </Grid>
 </UserControl>

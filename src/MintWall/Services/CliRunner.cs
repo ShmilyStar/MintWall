@@ -24,6 +24,7 @@ public static class CliRunner
                 "set" => await SetAsync(args),
                 "auto" => await AutoAsync(args),
                 "list" => List(args),
+                "video" => Video(args),
                 "uninstall" or "--uninstall" or "purge" => Uninstall(),
                 "help" or "-h" or "--help" => Help(),
                 _ => Unknown(verb),
@@ -55,12 +56,35 @@ public static class CliRunner
                   从该屏启用的源里随机取一张并应用，等同定时任务执行的一次动作。
               list [--target desktop|lock]
                   列出每块屏的壁纸源、各自的壁纸库、保存位置与显示器状态。
+              video <视频路径> | video stop
+                  视频壁纸：把本地视频垫在桌面图标后面循环静音播放，或停止。
               uninstall
                   删除默认数据目录（设置、壁纸库、缓存、缩略图、保存归档）和开机自启；
                   用户自选的壁纸库/保存目录保持不动。
               说明：--target 缺省 desktop；--screen 选第几块屏（序号、名称或 id 片段），缺省第 1 块。
                     桌面、锁屏和每块屏各自维护壁纸源与壁纸库，互不影响。
             """);
+        return 0;
+    }
+
+    /// <summary>视频壁纸：宿主进程独立运行，CLI 只负责起停。</summary>
+    private static int Video(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            Console.WriteLine("用法：video <视频路径> | video stop");
+            return 64;
+        }
+
+        if (string.Equals(args[1], "stop", StringComparison.OrdinalIgnoreCase))
+        {
+            VideoWallpaperService.Stop();
+            Console.WriteLine("视频壁纸已停止。");
+            return 0;
+        }
+
+        VideoWallpaperService.Start(args[1]);
+        Console.WriteLine("视频壁纸已启动：" + args[1]);
         return 0;
     }
 

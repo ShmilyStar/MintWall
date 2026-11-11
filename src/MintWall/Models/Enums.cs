@@ -11,7 +11,7 @@ public enum SourceKind
     /// <summary>The URL returns JSON; an image URL is read from it and fetched.</summary>
     Json,
 
-    /// <summary>不联网，直接用系统本机的 Windows 聚焦图（旧配置兼容）。</summary>
+    /// <summary>不联网，直接用系统本机的 Windows 聚焦图（旧配置兼容，界面已不再提供该选项）。</summary>
     Spotlight,
 
     /// <summary>必应每日壁纸：从 Bing 归档接口取当天的图。</summary>

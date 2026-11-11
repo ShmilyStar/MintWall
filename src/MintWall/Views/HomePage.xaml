@@ -26,7 +26,7 @@
         <sections:MonitorTabBar Grid.Row="1" DataContext="{Binding Desktop}" />
 
         <!-- 两块卡各占一半、横向铺满；预览按屏幕宽高比取高，所以两边永远一样大。 -->
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
+        <ScrollViewer Grid.Row="2" Style="{StaticResource StableScrollViewer}" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
         <Grid VerticalAlignment="Top">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" MinWidth="360" />
@@ -106,9 +106,13 @@
                                       IsChecked="{Binding Desktop.Selected.FetchFromLibrary}" />
                             <CheckBox Content="壁纸源"
                                       Style="{StaticResource ChoiceChip}"
-                                      Margin="0"
                                       ToolTip="从这块屏的接口源抓新图"
                                       IsChecked="{Binding Desktop.Selected.FetchFromSources}" />
+                            <CheckBox Content="视频"
+                                      Style="{StaticResource ChoiceChip}"
+                                      Margin="0"
+                                      ToolTip="从视频壁纸库播放视频（本地视频库 / 在线视频库）"
+                                      IsChecked="{Binding Desktop.Selected.FetchFromVideo}" />
                         </StackPanel>
                     </Grid>
                 </Grid>
