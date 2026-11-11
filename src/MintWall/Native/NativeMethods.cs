@@ -41,40 +41,6 @@ public static class NativeMethods
     [DllImport("kernel32.dll", SetLastError = true)]
     public static extern bool AllocConsole();
 
-    [DllImport("wtsapi32.dll", SetLastError = true)]
-    private static extern bool WTSQuerySessionInformation(IntPtr hServer, int sessionId, int infoClass, out IntPtr buffer, out int bytesReturned);
-
-    [DllImport("wtsapi32.dll")]
-    private static extern void WTSFreeMemory(IntPtr pointer);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct WtsSessionInfo
-    {
-        public uint SessionId;
-        public long LogonTime;
-    }
-
-    /// <summary>当前会话的登录时间（UTC）；用来认出开机自启的那次无参数启动。</summary>
-    public static DateTime? GetSessionLogonTime()
-    {
-        const int wtsCurrentSession = -1;
-        const int wtsSessionInfo = 24;
-        if (!WTSQuerySessionInformation(IntPtr.Zero, wtsCurrentSession, wtsSessionInfo, out IntPtr buffer, out _))
-        {
-            return null;
-        }
-
-        try
-        {
-            WtsSessionInfo info = Marshal.PtrToStructure<WtsSessionInfo>(buffer);
-            return info.LogonTime > 0 ? DateTime.FromFileTimeUtc(info.LogonTime) : null;
-        }
-        finally
-        {
-            WTSFreeMemory(buffer);
-        }
-    }
-
     public static void BroadcastEnvironmentChange()
     {
         SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, (string?)null, SPIF_UPDATEINIFILE | SPIF_SENDWININICHANGE);

@@ -120,10 +120,10 @@ MintWall/（MSIX）或 data/（便携）
 
 ```powershell
 # 构建并打包 MSIX + 便携 zip + 单文件 exe（首次会自动下载 makeappx/signtool）
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Version 1.6.8
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Version 1.6.13
 
 # 跳过 MSIX，只生成便携版与单文件 exe
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Version 1.6.8 -SkipMsix
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Version 1.6.13 -SkipMsix
 ```
 
 产物在 `dist/`。自签证书由 `scripts/make-cert.ps1` 生成，证书文件为 `packaging/MintWall.cer`。

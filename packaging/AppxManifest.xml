@@ -48,7 +48,7 @@
       </uap:VisualElements>
       <Extensions>
         <!-- 开机自启交给系统管理：卸载包时这一项会被一起删掉，不留注册表 Run 值。 -->
-        <desktop:Extension Category="windows.startupTask" Executable="MintWall.exe" EntryPoint="Windows.FullTrustApplication">
+        <desktop:Extension Category="windows.startupTask" Executable="MintWallStartup.exe" EntryPoint="Windows.FullTrustApplication">
           <desktop:StartupTask TaskId="MintWallStartup" Enabled="false" DisplayName="ms-resource:AppDisplayName" />
         </desktop:Extension>
       </Extensions>

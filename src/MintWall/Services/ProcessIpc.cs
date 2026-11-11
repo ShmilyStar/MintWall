@@ -29,6 +29,23 @@ public static class ProcessIpc
         }
     }
 
+    /// <summary>界面进程是否已经在跑（只探测，不点亮窗口）。</summary>
+    public static bool UiIsRunning
+    {
+        get
+        {
+            try
+            {
+                using Mutex mutex = Mutex.OpenExisting(SingleInstanceMutexName);
+                return true;
+            }
+            catch (WaitHandleCannotBeOpenedException)
+            {
+                return false;
+            }
+        }
+    }
+
     /// <summary>界面要接管（或卸载清理）时让后台退出，并等它真的释放互斥量。</summary>
     public static void StopWorkerAndWait()
     {
@@ -110,28 +127,5 @@ public static class ProcessIpc
 
         WorkerLog.Write($"交接：后台 pid={pid} 就绪={readyOk}");
         return readyOk;
-    }
-
-    /// <summary>
-    /// 开机自启（startupTask）不带参数，只能靠「刚登录不久 + 自启确实开着」认出它；
-    /// 这时直接进后台进程，不弹窗口也不加载 WPF。手动在登录窗口期内点图标会被让进后台，
-    /// 再点一次图标即可接回界面。
-    /// </summary>
-    public static bool IsAutostartLogin()
-    {
-        DateTime? logon = Native.NativeMethods.GetSessionLogonTime();
-        if (logon is null || (DateTime.UtcNow - logon.Value).TotalSeconds > 90)
-        {
-            return false;
-        }
-
-        try
-        {
-            return Task.Run(StartupService.IsEnabled).GetAwaiter().GetResult();
-        }
-        catch
-        {
-            return false;
-        }
     }
 }

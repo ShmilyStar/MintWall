@@ -44,7 +44,17 @@ public sealed class AutoChangeEngine : IDisposable
         }
     }
 
-    public bool IsMonitorOnline(MonitorSettings profile) => OnlineApplyTarget(profile) is not null;
+    public bool IsMonitorOnline(MonitorSettings profile)
+    {
+        IReadOnlyList<MonitorInfo> monitors = _wallpaper.GetMonitors();
+        if (monitors.Count == 1 && monitors[0].Id == Wallpapers.AllMonitors)
+        {
+            // 枚举失败时只有一个兜底项，无法判断这块屏在不在；按在线处理，整屏下发。
+            return true;
+        }
+
+        return monitors.Any(screen => string.Equals(screen.Id, profile.MonitorId, StringComparison.Ordinal));
+    }
 
     public async Task ChangeAsync(bool isLock, MonitorSettings profile, CancellationToken ct)
     {

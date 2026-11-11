@@ -55,6 +55,12 @@ Copy-Item -Path (Join-Path $assets '*') -Destination $stagingAssets -Force
 Copy-Item -Path (Join-Path $root 'packaging\Strings') -Destination $staging -Recurse -Force
 
 if (-not $SkipMsix) {
+    Write-Host '==> 编译开机启动壳（startupTask 不支持参数，壳负责传 --background）'
+    $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+    if (-not (Test-Path $csc)) { throw "找不到 .NET Framework 编译器：$csc" }
+    & $csc /nologo /target:winexe /optimize+ /platform:anycpu "/out:$(Join-Path $staging 'MintWallStartup.exe')" (Join-Path $root 'src\MintWall.Startup\Program.cs')
+    if ($LASTEXITCODE -ne 0) { throw "编译 MintWallStartup.exe 失败（$LASTEXITCODE）" }
+
     $toolDir = Join-Path $toolsRoot 'msix-tools'
     if (-not $SkipTools -or -not (Test-Path (Join-Path $toolDir 'makeappx.exe'))) {
         Write-Host '==> 获取 makeappx / signtool（来自 Microsoft.Windows.SDK.BuildTools）'

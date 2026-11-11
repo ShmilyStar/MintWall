@@ -40,6 +40,7 @@ public static class WorkerRunner
         using EventWaitHandle stop = new(false, EventResetMode.AutoReset, ProcessIpc.StopWorkerEventName);
         using CancellationTokenSource cts = new();
         using SessionMonitor sessions = new();
+        using ScheduleWake wake = new();
 
         AppSettings settings = new ConfigStore().Load();
         RetargetContainerPaths(settings);
@@ -60,15 +61,19 @@ public static class WorkerRunner
         List<Task> loops = new();
         foreach (MonitorSettings profile in settings.Desktop.Monitors.Where(p => p.Schedule.Enabled))
         {
-            loops.Add(DesktopLoop(engine, gate, profile, cts.Token));
+            loops.Add(DesktopLoop(engine, gate, wake, profile, cts.Token));
         }
 
         foreach (MonitorSettings profile in settings.Lock.Monitors.Where(p => p.Schedule.Enabled))
         {
-            loops.Add(LockLoop(engine, gate, sessions, profile, cts.Token));
+            loops.Add(LockLoop(engine, gate, wake, sessions, profile, cts.Token));
         }
 
         WorkerLog.Write($"后台进程已启动：桌面定时 {settings.Desktop.Monitors.Count(p => p.Schedule.Enabled)} 个，锁屏定时 {settings.Lock.Monitors.Count(p => p.Schedule.Enabled)} 个。");
+        foreach (MonitorSettings profile in settings.Desktop.Monitors.Where(p => p.Schedule.Enabled))
+        {
+            WorkerLog.Write($"桌面·{profile.Label} 每 {Math.Clamp(profile.Schedule.IntervalMinutes, 1, 43200)} 分钟换一次。");
+        }
 
         stop.WaitOne();
         WorkerLog.Write("收到让位信号，后台进程退出。");
@@ -100,26 +105,29 @@ public static class WorkerRunner
         }
     }
 
-    private static async Task DesktopLoop(AutoChangeEngine engine, SemaphoreSlim gate, MonitorSettings profile, CancellationToken ct)
+    private static async Task DesktopLoop(AutoChangeEngine engine, SemaphoreSlim gate, ScheduleWake wake, MonitorSettings profile, CancellationToken ct)
     {
         TimeSpan interval = TimeSpan.FromMinutes(Math.Clamp(profile.Schedule.IntervalMinutes, 1, 43200));
+        DateTime next = DateTime.UtcNow + interval;
         while (!ct.IsCancellationRequested)
         {
-            try
-            {
-                await Task.Delay(interval, ct);
-            }
-            catch (OperationCanceledException)
+            if (!await WaitUntilAsync(next, wake, ct))
             {
                 return;
             }
 
-            await TryChangeAsync(engine, gate, isLock: false, profile, ct);
+            next = DateTime.UtcNow + interval;
+            bool changed = await TryChangeAsync(engine, gate, isLock: false, profile, ct);
+            if (!changed)
+            {
+                // 屏幕未就绪或上一轮还没结束：不要白白等满一个间隔，20 秒后再试。
+                next = DateTime.UtcNow.AddSeconds(20);
+            }
         }
     }
 
     /// <summary>锁屏定时只在会话锁定后计时；解锁即停表，下次锁定重新计满一个间隔。</summary>
-    private static async Task LockLoop(AutoChangeEngine engine, SemaphoreSlim gate, SessionMonitor sessions, MonitorSettings profile, CancellationToken ct)
+    private static async Task LockLoop(AutoChangeEngine engine, SemaphoreSlim gate, ScheduleWake wake, SessionMonitor sessions, MonitorSettings profile, CancellationToken ct)
     {
         TimeSpan interval = TimeSpan.FromMinutes(Math.Clamp(profile.Schedule.IntervalMinutes, 1, 43200));
         while (!ct.IsCancellationRequested)
@@ -139,23 +147,57 @@ public static class WorkerRunner
                 continue;
             }
 
-            Task delay = Task.Delay(interval, ct);
-            Task winner = await Task.WhenAny(delay, changed.WaitAsync(ct));
-            if (ct.IsCancellationRequested)
+            // 锁定期间重新起算；唤醒/时间跳变会打断等待，重新按墙上时间判断。
+            DateTime next = DateTime.UtcNow + interval;
+            while (!ct.IsCancellationRequested)
             {
-                return;
-            }
+                (bool stillLocked, Task stateChanged) = sessions.Snapshot();
+                if (!stillLocked)
+                {
+                    break;
+                }
 
-            if (winner != delay)
-            {
-                continue;
-            }
+                if (wake.TryArm(out Task signal))
+                {
+                    continue;
+                }
 
-            await TryChangeAsync(engine, gate, isLock: true, profile, ct);
+                TimeSpan wait = next - DateTime.UtcNow;
+                if (wait <= TimeSpan.Zero)
+                {
+                    next = DateTime.UtcNow + interval;
+                    bool changedNow = await TryChangeAsync(engine, gate, isLock: true, profile, ct);
+                    if (!changedNow)
+                    {
+                        next = DateTime.UtcNow.AddSeconds(20);
+                    }
+
+                    continue;
+                }
+
+                Task delay = Task.Delay(wait, ct);
+                Task winner = await Task.WhenAny(delay, stateChanged, signal);
+                if (ct.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                if (winner == stateChanged)
+                {
+                    break;
+                }
+            }
         }
     }
 
-    private static async Task TryChangeAsync(AutoChangeEngine engine, SemaphoreSlim gate, bool isLock, MonitorSettings profile, CancellationToken ct)
+    /// <summary>
+    /// 按墙上时间等一个长定时；只有系统唤醒/时间被调整时事件会提前打断，
+    /// 平时不轮询，也不额外唤醒。
+    /// </summary>
+    private static Task<bool> WaitUntilAsync(DateTime deadline, ScheduleWake wake, CancellationToken ct)
+        => ScheduleWait.UntilAsync(deadline, wake, () => DateTime.UtcNow, ct);
+
+    private static async Task<bool> TryChangeAsync(AutoChangeEngine engine, SemaphoreSlim gate, bool isLock, MonitorSettings profile, CancellationToken ct)
     {
         bool acquired;
         try
@@ -164,13 +206,14 @@ public static class WorkerRunner
         }
         catch (OperationCanceledException)
         {
-            return;
+            return true;
         }
 
         if (!acquired)
         {
-            // 另一次换图还在进行：跳过本轮，与界面忙碌时的行为一致。
-            return;
+            // 另一次换图还在进行：跳过本轮，20 秒后重试。
+            WorkerLog.Write($"{(isLock ? "锁屏" : "桌面")}·{profile.Label} 上一轮换图未结束，稍后重试。");
+            return false;
         }
 
         try
@@ -178,7 +221,8 @@ public static class WorkerRunner
             if (!isLock && !engine.IsMonitorOnline(profile))
             {
                 // 屏拔掉了：这块屏暂停，与界面收起 tab 停表一致。
-                return;
+                WorkerLog.Write($"桌面·{profile.Label} 暂时找不到对应显示器，20 秒后重试。");
+                return false;
             }
 
             await engine.ChangeAsync(isLock, profile, ct);
@@ -195,6 +239,8 @@ public static class WorkerRunner
         {
             gate.Release();
         }
+
+        return true;
     }
 
     private static void RetargetContainerPaths(AppSettings settings)
@@ -264,4 +310,67 @@ internal sealed class SessionMonitor : IDisposable
     private static TaskCompletionSource NewSignal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public void Dispose() => SystemEvents.SessionSwitch -= OnSessionSwitch;
+}
+/// <summary>
+/// 定时循环的「提前醒来」信号：系统从休眠恢复或时间被调整时置位，
+/// 让循环重新按墙上时间判断是否该补触发；平时不产生任何周期唤醒。
+/// </summary>
+internal sealed class ScheduleWake : IWakeSignal, IDisposable
+{
+    private readonly object _gate = new();
+    private TaskCompletionSource _next = NewSignal();
+    private bool _pending;
+
+    public ScheduleWake()
+    {
+        SystemEvents.PowerModeChanged += OnPowerModeChanged;
+        SystemEvents.TimeChanged += OnTimeChanged;
+    }
+
+    /// <summary>取一个「下一次事件」的等待句柄；若事件已经发生过则返回 true，让调用方先重算。</summary>
+    public bool TryArm(out Task signal)
+    {
+        lock (_gate)
+        {
+            signal = _next.Task;
+            if (!_pending)
+            {
+                return false;
+            }
+
+            _pending = false;
+            return true;
+        }
+    }
+
+    private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+    {
+        if (e.Mode == PowerModes.Resume)
+        {
+            Raise();
+        }
+    }
+
+    private void OnTimeChanged(object? sender, EventArgs e) => Raise();
+
+    private void Raise()
+    {
+        TaskCompletionSource old;
+        lock (_gate)
+        {
+            _pending = true;
+            old = _next;
+            _next = NewSignal();
+        }
+
+        old.TrySetResult();
+    }
+
+    private static TaskCompletionSource NewSignal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public void Dispose()
+    {
+        SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+        SystemEvents.TimeChanged -= OnTimeChanged;
+    }
 }

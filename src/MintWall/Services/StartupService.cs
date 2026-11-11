@@ -22,6 +22,16 @@ public static class StartupService
         if (DataPaths.IsPackaged)
         {
             key?.DeleteValue(ValueName, throwOnMissingValue: false);
+            return;
+        }
+
+        // 旧版 Run 值没有 --background，会在开机时弹主界面；补上参数，下次登录起后台启动。
+        if (key?.GetValue(ValueName) is string value
+            && value.Length > 0
+            && !value.Contains("--background", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(Environment.ProcessPath))
+        {
+            key.SetValue(ValueName, $"\"{Environment.ProcessPath}\" --background");
         }
     }
 
@@ -72,7 +82,7 @@ public static class StartupService
             throw new InvalidOperationException("读不到程序自身路径。");
         }
 
-        key.SetValue(ValueName, $"\"{exe}\"");
+        key.SetValue(ValueName, $"\"{exe}\" --background");
     }
 
     /// <summary>界面开关走这条：WinRT 请求期间不阻塞 UI 线程，系统弹确认时界面仍可响应。</summary>

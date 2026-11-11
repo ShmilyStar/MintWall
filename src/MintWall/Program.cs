@@ -13,6 +13,17 @@ public static class Program
     {
         if (args.Length > 0)
         {
+            if (string.Equals(args[0], "--background", StringComparison.OrdinalIgnoreCase))
+            {
+                // 开机自启壳显式传入：只进后台，不加载 WPF、不弹主界面。
+                if (ProcessIpc.UiIsRunning)
+                {
+                    return 0;
+                }
+
+                return WorkerRunner.Run();
+            }
+
             if (string.Equals(args[0], "--worker", StringComparison.OrdinalIgnoreCase))
             {
                 string? ready = args.Skip(1).FirstOrDefault(a => a.StartsWith("--ready=", StringComparison.OrdinalIgnoreCase));
@@ -44,10 +55,6 @@ public static class Program
         {
             // 后台在跑时点图标意味着要回界面：先让它让位，再由 App 接管单实例与窗口。
             ProcessIpc.StopWorkerAndWait();
-        }
-        else if (ProcessIpc.IsAutostartLogin())
-        {
-            return WorkerRunner.Run();
         }
 
         App app = new();
