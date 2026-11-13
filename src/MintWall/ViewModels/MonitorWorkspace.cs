@@ -396,7 +396,7 @@ public partial class MonitorWorkspace : ObservableObject
 
     [RelayCommand]
     private void AddSource() =>
-        _host.RequestEditSource(new SourceProfile { Name = "新的壁纸源", Url = SelectedSource?.Url ?? "https://t.alcy.cc/ycy" }, true, this);
+        _host.RequestEditSource(new SourceProfile { Name = "新的壁纸源", Url = string.Empty }, true, this);
 
     [RelayCommand]
     private void EditSource()

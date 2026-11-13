@@ -13,7 +13,7 @@ public partial class SourceProfile : ObservableObject
     private string _name = "新的壁纸源";
 
     [ObservableProperty]
-    private string _url = "https://t.alcy.cc/ycy";
+    private string _url = string.Empty;
 
     [ObservableProperty]
     private SourceKind _kind = SourceKind.Auto;

@@ -57,7 +57,7 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0" Text="两种常见接口都能处理：直接返回图片（如 https://t.alcy.cc/ycy 会 302 跳到 .webp），或返回一段含图片链接的 JSON。"
+                <TextBlock Grid.Row="0" Text="两种常见接口都能处理：直接返回图片，或返回一段含图片链接的 JSON。"
                            Foreground="{StaticResource BrushTextDim}" FontSize="12" Margin="0,0,0,14" />
 
                 <StackPanel Grid.Row="1" Margin="0,0,0,10">
