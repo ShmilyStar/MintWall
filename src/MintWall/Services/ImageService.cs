@@ -262,7 +262,7 @@ public static class ImageService
     {
         if (!string.IsNullOrWhiteSpace(fieldPath))
         {
-            using JsonDocument doc = JsonDocument.Parse(json);
+            using JsonDocument doc = ParseOrFriendly(json);
             JsonElement cursor = doc.RootElement;
             foreach (string segment in fieldPath.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
@@ -285,9 +285,22 @@ public static class ImageService
             return NormalizeUrl(value);
         }
 
-        using JsonDocument auto = JsonDocument.Parse(json);
+        using JsonDocument auto = ParseOrFriendly(json);
         string? best = WalkForImageUrl(auto.RootElement, 0);
         return best is null ? null : NormalizeUrl(best);
+    }
+
+    /// <summary>源站返回的 body 不是合法 JSON 时给出人话，别让原始 JsonException 漏出去。</summary>
+    private static JsonDocument ParseOrFriendly(string json)
+    {
+        try
+        {
+            return JsonDocument.Parse(json);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException("接口返回的内容不是合法 JSON，无法解析图片地址：" + ex.Message, ex);
+        }
     }
 
     private static string? WalkForImageUrl(JsonElement element, int depth)

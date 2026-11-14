@@ -28,6 +28,7 @@ public partial class MonitorWorkspace : ObservableObject
     private CancellationTokenSource? _sourcePreviewCts;
     private string? _sourcePreviewPath;
     private CancellationTokenSource? _previewCts;
+    private CancellationTokenSource? _libraryRefreshCts;
     private readonly List<LibraryItem> _allItems = new();
     private bool _committingSource;
 
@@ -58,6 +59,9 @@ public partial class MonitorWorkspace : ObservableObject
 
         _timer.Tick += async (_, _) =>
         {
+            // 先停表：换图可能花很久，期间 DispatcherTimer 还会照常触发，
+            // 堆起来的 tick 全被 Busy 守卫白白丢掉；停表让下一轮从换图完成后重新计满。
+            _timer.Stop();
             try
             {
                 await FetchAsync(auto: true);
@@ -816,23 +820,68 @@ public partial class MonitorWorkspace : ObservableObject
 
     public void RefreshLibrary()
     {
-        string[] favorites = _host.Settings.Favorites.ToArray();
-        int removed = _library.Trim(favorites, _host.Settings.LibraryLimit);
-        List<string> files = _library.ListFiles().ToList();
+        // Trim/扫描/逐张读头都碰盘，库大时会明显卡 UI；挪到后台跑完再回 UI 线程铺列表。
+        _libraryRefreshCts?.Cancel();
+        CancellationTokenSource cts = new();
+        _libraryRefreshCts = cts;
 
-        _allItems.Clear();
-        foreach (string path in files)
+        string[] favorites = _host.Settings.Favorites.ToArray();
+        int limit = _host.Settings.LibraryLimit;
+        string statusPrefix = $"{Title}壁纸库超出 {limit} 张，已清理 {{0}} 张较早的（收藏不删）。";
+        _ = RefreshLibraryCoreAsync(favorites, limit, statusPrefix, cts.Token);
+    }
+
+    private async Task RefreshLibraryCoreAsync(string[] favorites, int limit, string statusPrefix, CancellationToken token)
+    {
+        List<LibraryItem> items;
+        int removed = 0;
+        try
         {
-            _allItems.Add(_library.ToItem(path, favorites));
+            items = await Task.Run(() =>
+            {
+                List<LibraryItem> result = new();
+                removed = _library.Trim(favorites, limit);
+                foreach (string path in _library.ListFiles())
+                {
+                    if (token.IsCancellationRequested)
+                    {
+                        return result;
+                    }
+
+                    result.Add(_library.ToItem(path, favorites));
+                }
+
+                // 这一轮补读的尺寸/来源一次落盘，不要每张图各写一遍 library.json。
+                _library.FlushMeta();
+                return result;
+            }, token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            _host.Log($"{Title}刷新壁纸库失败：{ex.Message}");
+            return;
         }
 
-        // 这一轮补读的尺寸/来源一次落盘，不要每张图各写一遍 library.json。
-        _library.FlushMeta();
+        if (token.IsCancellationRequested)
+        {
+            return;
+        }
+
+        _allItems.Clear();
+        foreach (LibraryItem item in items)
+        {
+            _allItems.Add(item);
+        }
+
         ApplyLibraryFilter();
 
         if (removed > 0)
         {
-            _host.StatusText = $"{Title}壁纸库超出 {_host.Settings.LibraryLimit} 张，已清理 {removed} 张较早的（收藏不删）。";
+            _host.StatusText = string.Format(statusPrefix, removed);
         }
     }
 
@@ -945,6 +994,9 @@ public partial class MonitorWorkspace : ObservableObject
         _sourcePreviewCts?.Cancel();
         _sourcePreviewCts?.Dispose();
         _sourcePreviewCts = null;
+        _libraryRefreshCts?.Cancel();
+        _libraryRefreshCts?.Dispose();
+        _libraryRefreshCts = null;
         _timer.Stop();
     }
 

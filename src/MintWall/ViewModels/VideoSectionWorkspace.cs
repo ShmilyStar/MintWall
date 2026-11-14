@@ -21,6 +21,7 @@ public partial class VideoSectionWorkspace : ObservableObject
     private readonly VideoLibrarySettings _data;
     private readonly HashSet<string> _favorites;
     private CancellationTokenSource? _thumbCts;
+    private CancellationTokenSource? _scanCts;
 
     public VideoSectionWorkspace(MainViewModel host, MonitorWorkspace monitor, VideoLibrarySettings data)
     {
@@ -151,7 +152,7 @@ public partial class VideoSectionWorkspace : ObservableObject
     };
 
     [RelayCommand]
-    private void ImportLocalVideos()
+    private async Task ImportLocalVideosAsync()
     {
         OpenFileDialog dialog = new()
         {
@@ -166,20 +167,27 @@ public partial class VideoSectionWorkspace : ObservableObject
             return;
         }
 
-        int added = 0;
+        // 复制大视频可能要几十秒，别把 UI 线程钉死。
+        string[] files = dialog.FileNames;
         string targetDir = LibraryDirText;
-        foreach (string path in dialog.FileNames)
+        int added = await _host.RunAsync($"正在导入视频到 {Title}…", async token => await Task.Run(() =>
         {
-            try
+            int count = 0;
+            foreach (string path in files)
             {
-                VideoLibraryStore.ImportLocal(path, targetDir);
-                added++;
+                try
+                {
+                    VideoLibraryStore.ImportLocal(path, targetDir);
+                    count++;
+                }
+                catch (Exception ex)
+                {
+                    _host.Log($"导入视频失败（{Path.GetFileName(path)}）：{ex.Message}");
+                }
             }
-            catch (Exception ex)
-            {
-                _host.Log($"导入视频失败（{Path.GetFileName(path)}）：{ex.Message}");
-            }
-        }
+
+            return count;
+        }, token));
 
         Rescan();
         SelectedLocalVideo = View.LastOrDefault();
@@ -540,20 +548,36 @@ public partial class VideoSectionWorkspace : ObservableObject
                 {
                     OnPropertyChanged(nameof(SelectedSaveDirText));
                 }
-            }
 
-            _host.Persist();
+                // 只有这两类改动影响落盘内容，其他属性（如 Url）由编辑对话框统一 SyncData。
+                _host.Persist();
+            }
         };
 
-    /// <summary>按当前库目录重新扫描视频文件（含子文件夹），与图片库一样目录驱动。</summary>
+    /// <summary>按当前库目录重新扫描视频文件（含子文件夹），与图片库一样目录驱动；扫描在后台，列表在 UI 线程铺。</summary>
     private void Rescan()
     {
-        LocalVideos.Clear();
+        _scanCts?.Cancel();
+        CancellationTokenSource cts = new();
+        _scanCts = cts;
+        CancellationToken token = cts.Token;
+
         string dir = LibraryDirText;
+        _ = RescanCoreAsync(dir, cts, token);
+    }
+
+    private async Task RescanCoreAsync(string dir, CancellationTokenSource cts, CancellationToken token)
+    {
+        List<VideoItem> items = new();
         try
         {
-            if (Directory.Exists(dir))
+            await Task.Run(() =>
             {
+                if (!Directory.Exists(dir))
+                {
+                    return;
+                }
+
                 List<string> files = Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
                     .Where(file => VideoLibraryStore.Extensions.Contains(Path.GetExtension(file).ToLowerInvariant()))
                     .OrderByDescending(File.GetLastWriteTimeUtc)
@@ -561,7 +585,12 @@ public partial class VideoSectionWorkspace : ObservableObject
 
                 foreach (string file in files)
                 {
-                    LocalVideos.Add(new VideoItem
+                    if (token.IsCancellationRequested)
+                    {
+                        return;
+                    }
+
+                    items.Add(new VideoItem
                     {
                         Name = Path.GetFileNameWithoutExtension(file),
                         FilePath = file,
@@ -569,11 +598,26 @@ public partial class VideoSectionWorkspace : ObservableObject
                         IsFavorite = _favorites.Contains(file),
                     });
                 }
-            }
+            }, token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _host.Log($"扫描视频库失败（{dir}）：{ex.Message}");
+        }
+
+        if (cts != _scanCts || token.IsCancellationRequested)
+        {
+            return;
+        }
+
+        LocalVideos.Clear();
+        foreach (VideoItem item in items)
+        {
+            LocalVideos.Add(item);
         }
 
         if (SelectedLocalVideo is null || !LocalVideos.Contains(SelectedLocalVideo))
@@ -593,10 +637,12 @@ public partial class VideoSectionWorkspace : ObservableObject
     /// <summary>顺序补齐首帧缩略图；没缓存时拉起 --video-thumb 子进程抓帧。</summary>
     private async Task LoadThumbnailsAsync()
     {
+        // 先 Cancel 并换新 CTS；旧实例等循环退出后再 Dispose，避免运行中的 token 被 Dispose。
         _thumbCts?.Cancel();
-        _thumbCts?.Dispose();
         CancellationTokenSource cts = new();
+        CancellationTokenSource? old = _thumbCts;
         _thumbCts = cts;
+        old?.Dispose();
         CancellationToken token = cts.Token;
 
         foreach (VideoItem item in LocalVideos)
@@ -622,6 +668,12 @@ public partial class VideoSectionWorkspace : ObservableObject
             catch (Exception)
             {
             }
+        }
+
+        if (_thumbCts == cts)
+        {
+            _thumbCts = null;
+            cts.Dispose();
         }
     }
 

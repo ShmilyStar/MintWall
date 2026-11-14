@@ -27,6 +27,10 @@ public static class VideoWallpaperService
             {
                 return false;
             }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
         }
     }
 

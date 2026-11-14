@@ -26,6 +26,11 @@ public static class ProcessIpc
             {
                 return false;
             }
+            catch (UnauthorizedAccessException)
+            {
+                // 事件被别的会话/权限挡住：按没在跑处理，别让探测把界面带崩。
+                return false;
+            }
         }
     }
 
@@ -40,6 +45,10 @@ public static class ProcessIpc
                 return true;
             }
             catch (WaitHandleCannotBeOpenedException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
             {
                 return false;
             }

@@ -95,6 +95,8 @@ public static class VideoWallpaperHost
         Thread listener = new(() =>
         {
             _stopEvent.WaitOne();
+            _stopEvent.Dispose();
+            _stopEvent = null;
             app.Dispatcher.BeginInvoke(new Action(() =>
             {
                 WorkerLog.Write("视频壁纸：收到停止信号。");

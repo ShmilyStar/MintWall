@@ -63,10 +63,12 @@ public sealed class AutoChangeEngine : IDisposable
             ? LockScreenService.ReadCurrentPath() ?? string.Empty
             : _wallpaper.CurrentWallpaperOf(profile.MonitorId);
 
-        FetchChannel channel = ResolveChannel(profile, library);
+        // 库文件列表一次枚举，ResolveChannel 和下一步挑图共用，别扫两遍盘。
+        List<string> libraryFiles = library.ListFiles().ToList();
+        FetchChannel channel = ResolveChannel(profile, libraryFiles);
         if (channel == FetchChannel.Library)
         {
-            if (NextLibraryPath(library, isLock, current) is { } item)
+            if (NextLibraryPath(libraryFiles, isLock, current) is { } item)
             {
                 await ApplyAsync(isLock, profile, item, ct);
                 Finish(library);
@@ -164,7 +166,7 @@ public sealed class AutoChangeEngine : IDisposable
         return library;
     }
 
-    private FetchChannel ResolveChannel(MonitorSettings profile, LibraryService library)
+    private FetchChannel ResolveChannel(MonitorSettings profile, List<string> libraryFiles)
     {
         bool hasEnabledSources = profile.Sources.Any(source => source.Enabled);
         List<FetchChannel> enabled = new(3);
@@ -173,7 +175,7 @@ public sealed class AutoChangeEngine : IDisposable
             enabled.Add(FetchChannel.BuiltIn);
         }
 
-        if (profile.FetchFromLibrary && library.ListFiles().Count > 0)
+        if (profile.FetchFromLibrary && libraryFiles.Count > 0)
         {
             enabled.Add(FetchChannel.Library);
         }
@@ -191,9 +193,9 @@ public sealed class AutoChangeEngine : IDisposable
         return enabled[Random.Shared.Next(enabled.Count)];
     }
 
-    private static string? NextLibraryPath(LibraryService library, bool isLock, string current)
+    private static string? NextLibraryPath(List<string> libraryFiles, bool isLock, string current)
     {
-        List<string> pool = library.ListFiles()
+        List<string> pool = libraryFiles
             .Where(path => !isLock || Path.GetExtension(path).ToLowerInvariant() is ".jpg" or ".jpeg" or ".png")
             .ToList();
         if (pool.Count > 1)

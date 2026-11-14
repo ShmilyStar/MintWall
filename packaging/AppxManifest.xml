@@ -8,7 +8,7 @@
 
   <Identity Name="MintWall.Desktop"
             Publisher="CN=MintWall Self-Signed"
-            Version="1.1.0.0"
+            Version="1.7.0.0"
             ProcessorArchitecture="x64" />
 
   <mp:PhoneIdentity PhoneProductId="6f0e2c1a-9d5b-4f4a-8f4e-2b7c1d9e3a11" PhonePublisherId="00000000-0000-0000-0000-000000000000" />

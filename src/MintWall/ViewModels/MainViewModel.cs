@@ -53,10 +53,36 @@ public partial class MainViewModel : ObservableObject
         _libraryLimit = Math.Clamp(Settings.LibraryLimit, 10, 100000);
         _desktopStyle = Settings.DesktopStyle;
 
-        // 启动项以注册表为准：用户可能在别处删掉了自启，界面就跟着显示关闭。
+        // 启动项以注册表/启动任务为准：用户可能在别处删掉了自启，界面就跟着显示关闭。
+        // packaged 的状态要查 StartupTask（COM 激活，可能几百毫秒），挪到后台读，别拖慢首帧。
         StartupService.RemoveLegacyValue();
-        _startWithWindows = StartupService.IsEnabled();
-        Settings.StartWithWindows = _startWithWindows;
+        if (!DataPaths.IsPackaged)
+        {
+            bool enabled = StartupService.IsEnabled();
+            _startWithWindows = enabled;
+            Settings.StartWithWindows = enabled;
+        }
+        else
+        {
+            _startWithWindows = Settings.StartWithWindows;
+            _ = Task.Run(async () =>
+            {
+                bool enabled = StartupService.IsEnabled();
+                System.Windows.Threading.Dispatcher? dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher is null)
+                {
+                    _startWithWindows = enabled;
+                    Settings.StartWithWindows = enabled;
+                    return;
+                }
+
+                await dispatcher.InvokeAsync(() =>
+                {
+                    _startWithWindows = enabled;
+                    Settings.StartWithWindows = enabled;
+                });
+            });
+        }
 
         Desktop = new TargetWorkspace(this, false);
         Lock = new TargetWorkspace(this, true);
@@ -310,9 +336,19 @@ public partial class MainViewModel : ObservableObject
 
     public async Task RunAsync(string busyText, Func<CancellationToken, Task> work)
     {
+        await RunAsync<object?>(busyText, async token =>
+        {
+            await work(token);
+            return null;
+        });
+    }
+
+    /// <summary>带结果值的工作：Busy 守卫下后台执行，完成时把结果交回调用方（冲突时给默认值）。</summary>
+    public async Task<T> RunAsync<T>(string busyText, Func<CancellationToken, Task<T>> work)
+    {
         if (Busy)
         {
-            return;
+            return default!;
         }
 
         using CancellationTokenSource cts = new();
@@ -321,16 +357,18 @@ public partial class MainViewModel : ObservableObject
         StatusText = busyText;
         try
         {
-            await work(cts.Token);
+            return await work(cts.Token);
         }
         catch (OperationCanceledException)
         {
             StatusText = "请求已取消。";
+            return default!;
         }
         catch (Exception ex)
         {
             StatusText = "失败：" + ex.Message;
             Log(StatusText);
+            return default!;
         }
         finally
         {
