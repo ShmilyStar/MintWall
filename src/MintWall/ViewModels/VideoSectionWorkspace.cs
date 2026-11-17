@@ -634,7 +634,7 @@ public partial class VideoSectionWorkspace : ObservableObject
         _ = LoadThumbnailsAsync();
     }
 
-    /// <summary>顺序补齐首帧缩略图；没缓存时拉起 --video-thumb 子进程抓帧。</summary>
+    /// <summary>批量补齐首帧缩略图：缺的一次性交给一个 --video-thumbs 子进程，缓存命中直接回填。</summary>
     private async Task LoadThumbnailsAsync()
     {
         // 先 Cancel 并换新 CTS；旧实例等循环退出后再 Dispose，避免运行中的 token 被 Dispose。
@@ -645,24 +645,27 @@ public partial class VideoSectionWorkspace : ObservableObject
         old?.Dispose();
         CancellationToken token = cts.Token;
 
-        foreach (VideoItem item in LocalVideos)
+        List<string> pending = LocalVideos
+            .Where(item => item.Thumbnail is null)
+            .Select(item => item.FilePath)
+            .ToList();
+        if (pending.Count > 0)
         {
-            if (token.IsCancellationRequested)
-            {
-                return;
-            }
-
-            if (item.Thumbnail is not null)
-            {
-                continue;
-            }
-
             try
             {
-                ImageSource? image = await VideoThumbnailStore.EnsureAsync(item.FilePath, token);
-                if (image is not null && !token.IsCancellationRequested)
+                Dictionary<string, ImageSource?> loaded =
+                    await VideoThumbnailStore.EnsureManyAsync(pending, token);
+                if (!token.IsCancellationRequested)
                 {
-                    item.Thumbnail = image;
+                    foreach (VideoItem item in LocalVideos)
+                    {
+                        if (item.Thumbnail is null
+                            && loaded.TryGetValue(item.FilePath, out ImageSource? image)
+                            && image is not null)
+                        {
+                            item.Thumbnail = image;
+                        }
+                    }
                 }
             }
             catch (Exception)

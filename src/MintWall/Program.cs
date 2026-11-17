@@ -42,6 +42,18 @@ public static class Program
                     args.Length > 2 ? args[2] : null);
             }
 
+            if (string.Equals(args[0], "--video-bars", StringComparison.OrdinalIgnoreCase))
+            {
+                // 子进程入口：量视频内嵌黑边，结果打到 stdout 给宿主解析。
+                return VideoThumbnailService.DetectBars(args.Length > 1 ? args[1] : null);
+            }
+
+            if (string.Equals(args[0], "--video-thumbs", StringComparison.OrdinalIgnoreCase))
+            {
+                // 子进程入口：按 JSON 清单批量抓首帧，避免一条视频拉起一次 WPF。
+                return VideoThumbnailService.CaptureMany(args.Length > 1 ? args[1] : null);
+            }
+
             // 放线程池跑：避免任何同步上下文捕获导致 HTTP/WinRT 续延死锁。
             return Task.Run(() => CliRunner.RunAsync(args)).GetAwaiter().GetResult();
         }

@@ -1,9 +1,12 @@
+using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using MintWall.Native;
 
 namespace MintWall.Services;
@@ -21,6 +24,19 @@ public static class VideoWallpaperHost
 
     private static EventWaitHandle? _stopEvent;
     private static readonly List<HwndSource> Sources = new();
+    private static readonly List<MediaElement> Players = new();
+
+    // 锁屏/全屏应用时视频壁纸看不见，继续解码纯属浪费 CPU（软件合成机器上尤其明显）。
+    private static bool _sessionLocked;
+    private static bool _fullScreenBusy;
+    private static bool _paused;
+
+    private const int QUNS_BUSY = 2;
+    private const int QUNS_RUNNING_D3D_FULL_SCREEN = 3;
+    private const int QUNS_PRESENTATION_MODE = 4;
+
+    [DllImport("shell32.dll")]
+    private static extern int SHQueryUserNotificationState(out int state);
 
     public static int Run(string? videoPath)
     {
@@ -60,6 +76,7 @@ public static class VideoWallpaperHost
         app.Startup += (_, _) => StartWindows(app, videoPath);
         app.Exit += (_, _) =>
         {
+            SystemEvents.SessionSwitch -= OnSessionSwitch;
             foreach (HwndSource source in Sources)
             {
                 source.Dispose();
@@ -78,15 +95,22 @@ public static class VideoWallpaperHost
             return;
         }
 
+        // 先量一次内嵌黑边（子进程软件渲染抓帧），再建窗口，避免先出现黑条再跳一下。
+        Bars bars = DetectBars(videoPath);
         IReadOnlyList<DisplayMonitor> monitors = MonitorEnumeration.Enumerate();
         foreach (DisplayMonitor monitor in monitors)
         {
-            CreateMonitorWindow(layer, monitor, videoPath);
+            CreateMonitorWindow(layer, monitor, videoPath, bars);
         }
 
         KeepOnWallpaperLayer();
-        DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(2) };
-        timer.Tick += (_, _) => KeepOnWallpaperLayer();
+        SystemEvents.SessionSwitch += OnSessionSwitch;
+        DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(5) };
+        timer.Tick += (_, _) =>
+        {
+            KeepOnWallpaperLayer();
+            RefreshFullScreenState();
+        };
         timer.Start();
 
         WorkerLog.Write($"视频壁纸已启动：{Path.GetFileName(videoPath)}，{monitors.Count} 块屏。");
@@ -128,7 +152,72 @@ public static class VideoWallpaperHost
         }
     }
 
-    private static void CreateMonitorWindow(IntPtr layer, DisplayMonitor monitor, string videoPath)
+    /// <summary>锁屏/全屏应用时暂停解码；只有状态变化才动播放器，避免频繁 Play/Pause。</summary>
+    private static void RefreshPlaybackState()
+    {
+        bool paused = _sessionLocked || _fullScreenBusy;
+        if (paused == _paused)
+        {
+            return;
+        }
+
+        _paused = paused;
+        foreach (MediaElement media in Players)
+        {
+            if (paused)
+            {
+                media.Pause();
+            }
+            else
+            {
+                media.Play();
+            }
+        }
+
+        WorkerLog.Write(paused
+            ? $"视频壁纸：暂停播放（{(_sessionLocked ? "会话锁定" : "全屏应用/演示")}）。"
+            : "视频壁纸：恢复播放。");
+    }
+
+    private static void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
+    {
+        if (e.Reason == SessionSwitchReason.SessionLock)
+        {
+            _sessionLocked = true;
+            RefreshPlaybackState();
+        }
+        else if (e.Reason == SessionSwitchReason.SessionUnlock)
+        {
+            _sessionLocked = false;
+            RefreshPlaybackState();
+        }
+    }
+
+    /// <summary>全屏游戏/演示时桌面被遮住：用 shell 的通知状态判断，5 秒一次，代价可忽略。</summary>
+    private static void RefreshFullScreenState()
+    {
+        try
+        {
+            if (SHQueryUserNotificationState(out int state) != 0)
+            {
+                return;
+            }
+
+            bool busy = state is QUNS_BUSY or QUNS_RUNNING_D3D_FULL_SCREEN or QUNS_PRESENTATION_MODE;
+            if (busy == _fullScreenBusy)
+            {
+                return;
+            }
+
+            _fullScreenBusy = busy;
+            RefreshPlaybackState();
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    private static void CreateMonitorWindow(IntPtr layer, DisplayMonitor monitor, string videoPath, Bars bars)
     {
         RECT bounds = monitor.Bounds;
         int width = Math.Max(1, bounds.Right - bounds.Left);
@@ -146,6 +235,10 @@ public static class VideoWallpaperHost
         };
 
         HwndSource source = new(parameters);
+
+        // 根视觉用一层可裁剪的容器包住 MediaElement：内嵌黑边的视频放大后要裁掉溢出部分。
+        Grid root = new() { Background = Brushes.Black, ClipToBounds = true };
+
         MediaElement media = new()
         {
             LoadedBehavior = MediaState.Manual,
@@ -161,10 +254,88 @@ public static class VideoWallpaperHost
             media.Position = TimeSpan.Zero;
             media.Play();
         };
+        root.Children.Add(media);
 
-        source.RootVisual = media;
+        ApplyBars(media, bars);
+
+        source.RootVisual = root;
         media.Play();
+        Players.Add(media);
         Sources.Add(source);
+    }
+
+    private readonly record struct Bars(double Top, double Bottom, double Left, double Right);
+
+    /// <summary>
+    /// 一些片源自带上下（或左右）黑边：直接铺屏会在桌面留黑条。
+    /// 在主进程里 RenderTargetBitmap 抓不到视频帧（硬件合成），所以交给 --video-bars 子进程
+    /// 用软件渲染量一次比例，再用放大+裁剪把黑边推出画面（等同 Wallpaper Engine 的“填充”）。
+    /// </summary>
+    private static Bars DetectBars(string videoPath)
+    {
+        string? exe = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(exe))
+        {
+            return default;
+        }
+
+        try
+        {
+            using Process process = Process.Start(new ProcessStartInfo(exe, $"--video-bars \"{videoPath}\"")
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true,
+            })!;
+
+            string output = process.StandardOutput.ReadToEnd().Trim();
+            if (!process.WaitForExit(15000))
+            {
+                process.Kill();
+                WorkerLog.Write("视频壁纸：黑边检测超时，按无黑边处理。");
+                return default;
+            }
+
+            string[] parts = output.Split(';');
+            if (parts.Length != 4
+                || !double.TryParse(parts[0], out double top)
+                || !double.TryParse(parts[1], out double bottom)
+                || !double.TryParse(parts[2], out double left)
+                || !double.TryParse(parts[3], out double right))
+            {
+                WorkerLog.Write("视频壁纸：黑边检测输出无法解析：" + output);
+                return default;
+            }
+
+            WorkerLog.Write($"视频壁纸：黑边检测 上{top:P0} 下{bottom:P0} 左{left:P0} 右{right:P0}");
+            return new Bars(top, bottom, left, right);
+        }
+        catch (Exception ex)
+        {
+            WorkerLog.Write("视频壁纸：黑边检测失败 " + ex.Message);
+            return default;
+        }
+    }
+
+    private static void ApplyBars(MediaElement media, Bars bars)
+    {
+        double vertical = 1 - bars.Top - bars.Bottom;
+        double horizontal = 1 - bars.Left - bars.Right;
+        if (vertical <= 0.1 || horizontal <= 0.1)
+        {
+            return;
+        }
+
+        if (bars.Top + bars.Bottom < 0.02 && bars.Left + bars.Right < 0.02)
+        {
+            return;
+        }
+
+        // 放大到黑边出画；另一轴必然溢出，由 root 的 ClipToBounds 裁掉。
+        double scale = Math.Max(1 / vertical, 1 / horizontal);
+        media.RenderTransformOrigin = new Point(0.5, 0.5);
+        media.RenderTransform = new ScaleTransform(scale, scale);
+        WorkerLog.Write($"视频壁纸：检测到内嵌黑边，已放大 {scale:F3} 倍铺满。");
     }
 
     private static void WritePid()
