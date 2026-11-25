@@ -26,6 +26,13 @@ public sealed class WallpaperService
         ? "IDesktopWallpaper（支持逐显示器）"
         : "SystemParametersInfo（仅整屏，未取到逐显示器接口）";
 
+    /// <summary>
+    /// 丢掉缓存的 IDesktopWallpaper 并重建。开机早期（启动任务刚拉起、显示器拓扑还没稳定）
+    /// 创建的实例可能只记住当时的显示器列表，之后屏幕接上也一直返回旧列表；
+    /// 调用方在找不到目标屏时重建一次再枚举。
+    /// </summary>
+    public void RefreshApiObjects() => RefreshApi();
+
     public IReadOnlyList<MonitorInfo> GetMonitors()
     {
         List<MonitorInfo> list = _api is not null ? MonitorsFromCom() : MonitorsFromWin32();

@@ -30,7 +30,20 @@ public sealed class AutoChangeEngine : IDisposable
 
         foreach (MonitorSettings profile in _settings.Desktop.Monitors)
         {
-            if (!File.Exists(profile.LastApplied) || OnlineApplyTarget(profile) is not { } target)
+            if (!File.Exists(profile.LastApplied))
+            {
+                continue;
+            }
+
+            string? target = OnlineApplyTarget(profile);
+            if (target is null)
+            {
+                // 启动任务可能在显示器拓扑稳定前就拉起 worker，缓存的接口会一直返回旧列表。
+                _wallpaper.RefreshApiObjects();
+                target = OnlineApplyTarget(profile);
+            }
+
+            if (target is null)
             {
                 continue;
             }
@@ -45,6 +58,19 @@ public sealed class AutoChangeEngine : IDisposable
     }
 
     public bool IsMonitorOnline(MonitorSettings profile)
+    {
+        if (IsMonitorListed(profile))
+        {
+            return true;
+        }
+
+        // 开机早期创建的 IDesktopWallpaper 可能只记住了当时的屏（例如 UID0 临时项）；
+        // 屏幕后接上时它不会自动刷新，必须丢掉缓存重建一次，否则会一直误判离线。
+        _wallpaper.RefreshApiObjects();
+        return IsMonitorListed(profile);
+    }
+
+    private bool IsMonitorListed(MonitorSettings profile)
     {
         IReadOnlyList<MonitorInfo> monitors = _wallpaper.GetMonitors();
         if (monitors.Count == 1 && monitors[0].Id == Wallpapers.AllMonitors)
