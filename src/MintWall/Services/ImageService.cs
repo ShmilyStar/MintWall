@@ -63,6 +63,9 @@ public static class ImageService
         // 自己跟随跳转：.NET 默认拒绝 https → http 的降级重定向，而部分壁纸站正是这么跳的。
         HttpClientHandler handler = new()
         {
+            // 固定直连：不读取 Windows 系统代理。
+            // 系统代理关闭/更换后，缓存的代理地址会让请求一直发往已失效的端口。
+            UseProxy = false,
             AllowAutoRedirect = false,
             UseCookies = true,
             CookieContainer = new CookieContainer(),

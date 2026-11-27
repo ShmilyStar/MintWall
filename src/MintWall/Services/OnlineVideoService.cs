@@ -12,7 +12,9 @@ public static class OnlineVideoService
 
     private static HttpClient CreateHttp()
     {
-        HttpClient client = new() { Timeout = TimeSpan.FromSeconds(180) };
+        // 固定直连：不读取 Windows 系统代理，避免代理退出后请求仍发往旧端口。
+        HttpClientHandler handler = new() { UseProxy = false };
+        HttpClient client = new(handler) { Timeout = TimeSpan.FromSeconds(180) };
         // 部分视频 CDN 会拒绝没有 User-Agent 的请求（会表现为下载失败/空文件）。
         client.DefaultRequestHeaders.TryAddWithoutValidation(
             "User-Agent",
